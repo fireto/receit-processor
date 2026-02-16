@@ -5,7 +5,7 @@ from typing import Optional
 
 VERSION_MAJOR = 1
 VERSION_MINOR = 3
-VERSION_PATCH = 1
+VERSION_PATCH = 2
 VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"
 
 # Bulgarian Lev to Euro fixed rate (currency board, pre-2026)

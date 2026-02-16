@@ -93,6 +93,7 @@ async def upload_receipt(
     try:
         receipt = parse_receipt(image_bytes, mime_type, provider=provider)
     except Exception as e:
+        logger.error("Failed to parse receipt: %s", e, exc_info=True)
         raise HTTPException(
             status_code=422, detail=f"Failed to parse receipt: {e}"
         )
