@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="/manifest.json">
+  <title>Receipt Processor</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Receipt Processor</h1>
+
+  <div class="upload-area" id="uploadArea">
+    <label for="fileInput">
+      <span class="icon">📸</span>
+      Tap to scan a receipt
+    </label>
+    <input type="file" id="fileInput" accept="image/*" capture="environment">
+  </div>
+
+  <div class="spinner" id="spinner"></div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="success-badge" id="successBadge">Written to Google Sheets</div>
+
+  <div class="result-card" id="resultCard">
+    <div class="field">
+      <span class="label">Date</span>
+      <span class="value" id="resDate"></span>
+    </div>
+    <div class="field">
+      <span class="label">Amount</span>
+      <span class="value"><span id="resEur"></span> EUR (<span id="resBgn"></span> лв)</span>
+    </div>
+    <div class="field">
+      <span class="label">Category</span>
+      <select id="resCategory"></select>
+    </div>
+    <div class="field">
+      <span class="label">Payment</span>
+      <select id="resPayment"></select>
+    </div>
+    <div class="field">
+      <span class="label">Notes</span>
+      <input type="text" id="resNotes" placeholder="...">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-undo" id="btnUndo">Undo</button>
+      <button class="btn btn-new" id="btnNew">New Receipt</button>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
