@@ -1,38 +1,18 @@
-"""Configuration: categories, column mapping, constants."""
+"""Configuration: column mapping, constants."""
 
 from dataclasses import dataclass
 from typing import Optional
 
 VERSION_MAJOR = 1
 VERSION_MINOR = 4
-VERSION_PATCH = 0
+VERSION_PATCH = 1
 VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"
 
 # Bulgarian Lev to Euro fixed rate (currency board, pre-2026)
 BGN_PER_EUR = 1.95583
 
-CATEGORIES = [
-    "Храна",
-    "Оборотни стоки",
-    "Стоки за дома",
-    "Забавления",
-    "Козметика",
-    "Гориво",
-    "Дрехи и обувки",
-    "Разходи квартира",
-    "Балчик",
-    "Варна",
-    "Провадия",
-    "Подаръци",
-    "Техсол",
-    "Абонаментни сметки",
-    "Кредитни карти",
-    "Здравни",
-    "Лора",
-    "Бебе",
-    "Разни",
-    "Разходи апартамент",
-]
+# Default fallback category (must exist in the Категории named range)
+DEFAULT_CATEGORY = "Разни"
 
 # Google Sheet column order
 SHEET_COLUMNS = [

@@ -8,6 +8,7 @@ from backend.config import SHEET_COLUMNS, ReceiptData
 from backend.sheets import (
     append_expense,
     delete_row,
+    get_categories,
     get_last_row_number,
     get_payment_methods,
     lookup_category_by_bulstat,
@@ -107,6 +108,22 @@ class TestGetLastRowNumber:
     def test_returns_row_count(self, mock_gspread):
         mock_gspread.get_all_values.return_value = [["h"] * 10, ["d"] * 10, ["d"] * 10]
         assert get_last_row_number() == 3
+
+
+class TestGetCategories:
+    def test_returns_categories_from_named_range(self, mock_gspread):
+        mock_gspread._spreadsheet.values_get.return_value = {
+            "values": [["Храна"], ["Козметика"], ["Разни"]]
+        }
+        result = get_categories()
+        assert result == ["Храна", "Козметика", "Разни"]
+
+    def test_filters_empty_values(self, mock_gspread):
+        mock_gspread._spreadsheet.values_get.return_value = {
+            "values": [["Храна"], [""], ["Разни"]]
+        }
+        result = get_categories()
+        assert result == ["Храна", "Разни"]
 
 
 class TestGetPaymentMethods:

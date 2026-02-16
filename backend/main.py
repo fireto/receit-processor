@@ -11,11 +11,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend.config import CATEGORIES, VERSION, ReceiptData
+from backend.config import VERSION, ReceiptData
 from backend.receipt_parser import AVAILABLE_PROVIDERS, decode_receipt_qr, parse_receipt
 from backend.sheets import (
     append_expense,
     delete_row,
+    get_categories,
     get_last_row_number,
     get_payment_methods,
     lookup_category_by_bulstat,
@@ -66,13 +67,18 @@ class ManualEntryRequest(BaseModel):
 def get_config():
     """Return categories and payment methods for the frontend."""
     try:
+        categories = get_categories()
+    except Exception as e:
+        logger.error("Failed to load categories from Sheets: %s", e)
+        categories = []
+    try:
         payment_methods = get_payment_methods()
     except Exception as e:
         logger.error("Failed to load payment methods from Sheets: %s", e)
         payment_methods = []
     return {
         "version": VERSION,
-        "categories": CATEGORIES,
+        "categories": categories,
         "payment_methods": payment_methods,
         "providers": AVAILABLE_PROVIDERS,
         "default_provider": os.environ.get("VISION_PROVIDER", "claude"),
@@ -97,7 +103,13 @@ async def upload_receipt(
     qr_data = decode_receipt_qr(image_bytes)
 
     try:
-        receipt = parse_receipt(image_bytes, mime_type, provider=provider)
+        categories = get_categories()
+    except Exception as e:
+        logger.warning("Failed to load categories, parsing without validation: %s", e)
+        categories = None
+
+    try:
+        receipt = parse_receipt(image_bytes, mime_type, provider=provider, categories=categories)
     except Exception as e:
         logger.error("Failed to parse receipt: %s", e, exc_info=True)
         raise HTTPException(

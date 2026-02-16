@@ -7,7 +7,7 @@ import logging
 import os
 import re
 
-from backend.config import CATEGORIES, ReceiptData
+from backend.config import DEFAULT_CATEGORY, ReceiptData
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +36,9 @@ Rules:
 """
 
 
-def _build_prompt() -> str:
+def _build_prompt(categories: list[str]) -> str:
     return SYSTEM_PROMPT.format(
-        categories=", ".join(CATEGORIES),
+        categories=", ".join(categories),
     )
 
 
@@ -55,11 +55,11 @@ def _parse_json_response(text: str) -> dict:
     raise ValueError(f"No valid JSON found in response: {text[:200]}")
 
 
-def _validate_receipt_data(data: dict) -> ReceiptData:
+def _validate_receipt_data(data: dict, categories: list[str] | None = None) -> ReceiptData:
     """Validate and convert parsed JSON to ReceiptData."""
-    category = data.get("category", "Разни")
-    if category not in CATEGORIES:
-        category = "Разни"
+    category = data.get("category", DEFAULT_CATEGORY)
+    if categories and category not in categories:
+        category = DEFAULT_CATEGORY
 
     bulstat = data.get("bulstat")
     if bulstat:
@@ -85,7 +85,7 @@ def _validate_receipt_data(data: dict) -> ReceiptData:
     )
 
 
-def _parse_with_claude(image_bytes: bytes, mime_type: str) -> dict:
+def _parse_with_claude(image_bytes: bytes, mime_type: str, categories: list[str]) -> dict:
     """Parse receipt using Anthropic Claude API."""
     import anthropic
 
@@ -107,7 +107,7 @@ def _parse_with_claude(image_bytes: bytes, mime_type: str) -> dict:
                             "data": b64,
                         },
                     },
-                    {"type": "text", "text": _build_prompt()},
+                    {"type": "text", "text": _build_prompt(categories)},
                 ],
             }
         ],
@@ -115,7 +115,7 @@ def _parse_with_claude(image_bytes: bytes, mime_type: str) -> dict:
     return _parse_json_response(message.content[0].text)
 
 
-def _parse_with_gemini(image_bytes: bytes, mime_type: str) -> dict:
+def _parse_with_gemini(image_bytes: bytes, mime_type: str, categories: list[str]) -> dict:
     """Parse receipt using Google Gemini API."""
     from google import genai
     from google.genai import types
@@ -128,7 +128,7 @@ def _parse_with_gemini(image_bytes: bytes, mime_type: str) -> dict:
             types.Content(
                 parts=[
                     types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    types.Part.from_text(text=_build_prompt()),
+                    types.Part.from_text(text=_build_prompt(categories)),
                 ]
             )
         ],
@@ -137,7 +137,7 @@ def _parse_with_gemini(image_bytes: bytes, mime_type: str) -> dict:
     return _parse_json_response(response.text)
 
 
-def _parse_with_grok(image_bytes: bytes, mime_type: str) -> dict:
+def _parse_with_grok(image_bytes: bytes, mime_type: str, categories: list[str]) -> dict:
     """Parse receipt using xAI Grok API (OpenAI-compatible)."""
     from openai import OpenAI
 
@@ -160,7 +160,7 @@ def _parse_with_grok(image_bytes: bytes, mime_type: str) -> dict:
                             "url": f"data:{mime_type};base64,{b64}",
                         },
                     },
-                    {"type": "text", "text": _build_prompt()},
+                    {"type": "text", "text": _build_prompt(categories)},
                 ],
             }
         ],
@@ -223,6 +223,7 @@ def parse_receipt(
     image_bytes: bytes,
     mime_type: str = "image/jpeg",
     provider: str | None = None,
+    categories: list[str] | None = None,
 ) -> ReceiptData:
     """Parse a receipt image and return structured data.
 
@@ -230,6 +231,7 @@ def parse_receipt(
         image_bytes: Raw image bytes.
         mime_type: Image MIME type (e.g. image/jpeg, image/png).
         provider: Vision provider name. Defaults to VISION_PROVIDER env var.
+        categories: Allowed category list. If None, no category validation.
     """
     if provider is None:
         provider = os.environ.get("VISION_PROVIDER", "claude")
@@ -240,5 +242,5 @@ def parse_receipt(
             f"Unknown provider '{provider}'. Choose from: {', '.join(_PROVIDERS)}"
         )
 
-    raw = parse_fn(image_bytes, mime_type)
-    return _validate_receipt_data(raw)
+    raw = parse_fn(image_bytes, mime_type, categories or [])
+    return _validate_receipt_data(raw, categories)

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from backend.config import BGN_PER_EUR, CATEGORIES, ReceiptData
+from backend.config import BGN_PER_EUR, ReceiptData
 from backend.receipt_parser import (
     _parse_json_response,
     _validate_receipt_data,
@@ -51,9 +51,15 @@ class TestValidateReceiptData:
         assert receipt.bulstat == "123456789"
 
     def test_unknown_category_falls_back_to_razni(self):
+        categories = ["Храна", "Разни"]
         data = {"date": "01.01.2026", "total_eur": 5.0, "category": "NonExistent"}
-        receipt = _validate_receipt_data(data)
+        receipt = _validate_receipt_data(data, categories)
         assert receipt.category == "Разни"
+
+    def test_category_accepted_when_no_categories_provided(self):
+        data = {"date": "01.01.2026", "total_eur": 5.0, "category": "Anything"}
+        receipt = _validate_receipt_data(data)
+        assert receipt.category == "Anything"
 
     def test_missing_fields_use_defaults(self):
         data = {}
@@ -101,10 +107,11 @@ class TestValidateReceiptData:
         receipt = _validate_receipt_data(data)
         assert receipt.bulstat is None
 
-    def test_all_categories_are_valid(self):
-        for cat in CATEGORIES:
+    def test_valid_category_accepted(self):
+        categories = ["Храна", "Козметика", "Разни"]
+        for cat in categories:
             data = {"category": cat}
-            receipt = _validate_receipt_data(data)
+            receipt = _validate_receipt_data(data, categories)
             assert receipt.category == cat
 
 
@@ -150,27 +157,30 @@ class TestParseReceiptProviders:
 
     def test_claude_provider(self, sample_api_response, sample_image_bytes):
         mock_fn = MagicMock(return_value=sample_api_response)
+        categories = ["Храна", "Разни"]
         with patch.dict("backend.receipt_parser._PROVIDERS", {"claude": mock_fn}):
-            receipt = parse_receipt(sample_image_bytes, "image/jpeg", provider="claude")
+            receipt = parse_receipt(sample_image_bytes, "image/jpeg", provider="claude", categories=categories)
 
-        mock_fn.assert_called_once_with(sample_image_bytes, "image/jpeg")
+        mock_fn.assert_called_once_with(sample_image_bytes, "image/jpeg", categories)
         assert receipt.category == "Храна"
         assert receipt.total_eur == 23.45
 
     def test_gemini_provider(self, sample_api_response, sample_image_bytes):
         mock_fn = MagicMock(return_value=sample_api_response)
+        categories = ["Храна", "Разни"]
         with patch.dict("backend.receipt_parser._PROVIDERS", {"gemini": mock_fn}):
-            receipt = parse_receipt(sample_image_bytes, "image/jpeg", provider="gemini")
+            receipt = parse_receipt(sample_image_bytes, "image/jpeg", provider="gemini", categories=categories)
 
-        mock_fn.assert_called_once_with(sample_image_bytes, "image/jpeg")
+        mock_fn.assert_called_once_with(sample_image_bytes, "image/jpeg", categories)
         assert receipt.category == "Храна"
 
     def test_grok_provider(self, sample_api_response, sample_image_bytes):
         mock_fn = MagicMock(return_value=sample_api_response)
+        categories = ["Храна", "Разни"]
         with patch.dict("backend.receipt_parser._PROVIDERS", {"grok": mock_fn}):
-            receipt = parse_receipt(sample_image_bytes, "image/jpeg", provider="grok")
+            receipt = parse_receipt(sample_image_bytes, "image/jpeg", provider="grok", categories=categories)
 
-        mock_fn.assert_called_once_with(sample_image_bytes, "image/jpeg")
+        mock_fn.assert_called_once_with(sample_image_bytes, "image/jpeg", categories)
         assert receipt.category == "Храна"
 
     def test_unknown_provider_raises(self, sample_image_bytes):

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.config import CATEGORIES, VERSION, ReceiptData
+from backend.config import VERSION, ReceiptData
 
 TEST_TOKEN = "test-pin"
 AUTH_HEADER = {"Authorization": f"Bearer {TEST_TOKEN}"}
@@ -24,12 +24,14 @@ def client():
          patch("backend.main.get_last_row_number") as mock_last, \
          patch("backend.main.lookup_category_by_bulstat") as mock_lookup, \
          patch("backend.main.decode_receipt_qr") as mock_qr, \
-         patch("backend.main.get_payment_methods") as mock_pm:
+         patch("backend.main.get_payment_methods") as mock_pm, \
+         patch("backend.main.get_categories") as mock_cat:
         mock_append.return_value = 42
         mock_last.return_value = 42
         mock_lookup.return_value = None
         mock_qr.return_value = None
         mock_pm.return_value = ["Cash", "FIB 0889", "Revolut", "Bulbank 4416"]
+        mock_cat.return_value = ["Храна", "Козметика", "Разни"]
 
         test_client = TestClient(backend.main.app)
         test_client._mock_append = mock_append
@@ -38,6 +40,7 @@ def client():
         test_client._mock_lookup = mock_lookup
         test_client._mock_qr = mock_qr
         test_client._mock_pm = mock_pm
+        test_client._mock_cat = mock_cat
         yield test_client
 
 
@@ -61,7 +64,7 @@ class TestGetConfig:
         assert resp.status_code == 200
         data = resp.json()
         assert data["version"] == VERSION
-        assert data["categories"] == CATEGORIES
+        assert data["categories"] == ["Храна", "Козметика", "Разни"]
         assert data["payment_methods"] == ["Cash", "FIB 0889", "Revolut", "Bulbank 4416"]
         assert "providers" in data
         assert set(data["providers"]) == {"claude", "gemini", "grok"}

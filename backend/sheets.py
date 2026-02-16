@@ -61,14 +61,24 @@ def get_last_row_number() -> int:
     return len(ws.get_all_values())
 
 
-def get_payment_methods() -> list[str]:
-    """Read payment methods from the named range ПлатежноСредство."""
+def _get_named_range(name: str) -> list[str]:
+    """Read values from a named range, returning a flat list of non-empty strings."""
     client = _get_client()
     sheet_id = os.environ["GOOGLE_SHEETS_ID"]
     spreadsheet = client.open_by_key(sheet_id)
-    result = spreadsheet.values_get("ПлатежноСредство")
+    result = spreadsheet.values_get(name)
     values = result.get("values", [])
     return [cell for row in values for cell in row if cell.strip()]
+
+
+def get_categories() -> list[str]:
+    """Read categories from the named range Категории."""
+    return _get_named_range("Категории")
+
+
+def get_payment_methods() -> list[str]:
+    """Read payment methods from the named range ПлатежноСредство."""
+    return _get_named_range("ПлатежноСредство")
 
 
 def lookup_category_by_bulstat(bulstat: str) -> str | None:
