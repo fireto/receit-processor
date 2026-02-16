@@ -1,5 +1,6 @@
 """FastAPI application: receipt upload, edit, undo endpoints."""
 
+import hmac
 import os
 from pathlib import Path
 
@@ -10,12 +11,27 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.config import CATEGORIES, PAYMENT_METHODS, ReceiptData
-from backend.receipt_parser import parse_receipt
+from backend.receipt_parser import AVAILABLE_PROVIDERS, parse_receipt
 from backend.sheets import append_expense, delete_row, get_last_row_number, update_cell
 
 load_dotenv()
 
 app = FastAPI(title="Receipt Processor")
+
+AUTH_TOKEN = os.environ.get("AUTH_TOKEN", "")
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Require Bearer token for /api/* routes."""
+    if AUTH_TOKEN and request.url.path.startswith("/api/"):
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        token = auth_header.removeprefix("Bearer ")
+        if not hmac.compare_digest(token, AUTH_TOKEN):
+            return JSONResponse(status_code=401, content={"detail": "Invalid token"})
+    return await call_next(request)
 
 # Track last written row per session for undo
 _last_written_row: int | None = None
@@ -34,11 +50,16 @@ def get_config():
     return {
         "categories": CATEGORIES,
         "payment_methods": PAYMENT_METHODS,
+        "providers": AVAILABLE_PROVIDERS,
+        "default_provider": os.environ.get("VISION_PROVIDER", "claude"),
     }
 
 
 @app.post("/api/upload")
-async def upload_receipt(file: UploadFile = File(...)):
+async def upload_receipt(
+    file: UploadFile = File(...),
+    provider: str | None = None,
+):
     """Upload a receipt image, parse it, and write to Google Sheets."""
     global _last_written_row
 
@@ -49,7 +70,7 @@ async def upload_receipt(file: UploadFile = File(...)):
     mime_type = file.content_type
 
     try:
-        receipt = parse_receipt(image_bytes, mime_type)
+        receipt = parse_receipt(image_bytes, mime_type, provider=provider)
     except Exception as e:
         raise HTTPException(
             status_code=422, detail=f"Failed to parse receipt: {e}"

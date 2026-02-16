@@ -7,13 +7,16 @@ from fastapi.testclient import TestClient
 
 from backend.config import CATEGORIES, PAYMENT_METHODS, ReceiptData
 
+TEST_TOKEN = "test-pin"
+AUTH_HEADER = {"Authorization": f"Bearer {TEST_TOKEN}"}
+
 
 @pytest.fixture
 def client():
-    """Create a TestClient with mocked sheets module."""
-    # Reset the last written row state
+    """Create a TestClient with mocked sheets module and auth configured."""
     import backend.main
     backend.main._last_written_row = None
+    backend.main.AUTH_TOKEN = TEST_TOKEN
 
     with patch("backend.main.append_expense") as mock_append, \
          patch("backend.main.update_cell") as mock_update, \
@@ -22,7 +25,6 @@ def client():
         mock_append.return_value = 42
         mock_last.return_value = 42
 
-        # Store mocks on the client for assertions
         test_client = TestClient(backend.main.app)
         test_client._mock_append = mock_append
         test_client._mock_update = mock_update
@@ -30,13 +32,30 @@ def client():
         yield test_client
 
 
+class TestAuth:
+    def test_no_token_returns_401(self, client):
+        resp = client.get("/api/config")
+        assert resp.status_code == 401
+
+    def test_wrong_token_returns_401(self, client):
+        resp = client.get("/api/config", headers={"Authorization": "Bearer wrong"})
+        assert resp.status_code == 401
+
+    def test_valid_token_passes(self, client):
+        resp = client.get("/api/config", headers=AUTH_HEADER)
+        assert resp.status_code == 200
+
+
 class TestGetConfig:
     def test_returns_categories_and_payments(self, client):
-        resp = client.get("/api/config")
+        resp = client.get("/api/config", headers=AUTH_HEADER)
         assert resp.status_code == 200
         data = resp.json()
         assert data["categories"] == CATEGORIES
         assert data["payment_methods"] == PAYMENT_METHODS
+        assert "providers" in data
+        assert set(data["providers"]) == {"claude", "gemini", "grok"}
+        assert "default_provider" in data
 
 
 class TestUpload:
@@ -52,6 +71,7 @@ class TestUpload:
 
         resp = client.post(
             "/api/upload",
+            headers=AUTH_HEADER,
             files={"file": ("receipt.jpg", sample_image_bytes, "image/jpeg")},
         )
 
@@ -66,6 +86,7 @@ class TestUpload:
     def test_upload_rejects_non_image(self, client):
         resp = client.post(
             "/api/upload",
+            headers=AUTH_HEADER,
             files={"file": ("doc.txt", b"hello", "text/plain")},
         )
         assert resp.status_code == 400
@@ -77,6 +98,7 @@ class TestUpload:
 
         resp = client.post(
             "/api/upload",
+            headers=AUTH_HEADER,
             files={"file": ("receipt.jpg", sample_image_bytes, "image/jpeg")},
         )
 
@@ -92,6 +114,7 @@ class TestUpload:
 
         resp = client.post(
             "/api/upload",
+            headers=AUTH_HEADER,
             files={"file": ("receipt.jpg", sample_image_bytes, "image/jpeg")},
         )
 
@@ -103,6 +126,7 @@ class TestUpdateEntry:
     def test_update_category(self, client):
         resp = client.patch(
             "/api/entry/5",
+            headers=AUTH_HEADER,
             json={"column": "Категория", "value": "Бебе"},
         )
         assert resp.status_code == 200
@@ -112,6 +136,7 @@ class TestUpdateEntry:
         client._mock_update.side_effect = ValueError("Unknown column")
         resp = client.patch(
             "/api/entry/5",
+            headers=AUTH_HEADER,
             json={"column": "BadColumn", "value": "x"},
         )
         assert resp.status_code == 400
@@ -119,13 +144,13 @@ class TestUpdateEntry:
 
 class TestDeleteEntry:
     def test_delete_row(self, client):
-        resp = client.delete("/api/entry/5")
+        resp = client.delete("/api/entry/5", headers=AUTH_HEADER)
         assert resp.status_code == 200
         client._mock_delete.assert_called_once_with(5)
 
     def test_delete_failure(self, client):
         client._mock_delete.side_effect = Exception("API error")
-        resp = client.delete("/api/entry/5")
+        resp = client.delete("/api/entry/5", headers=AUTH_HEADER)
         assert resp.status_code == 500
 
 
@@ -136,16 +161,15 @@ class TestUndo:
             date="15.02.2026", total_eur=10.0, category="Храна"
         )
 
-        # Upload first
         client.post(
             "/api/upload",
+            headers=AUTH_HEADER,
             files={"file": ("receipt.jpg", sample_image_bytes, "image/jpeg")},
         )
 
-        # Then undo
-        resp = client.delete("/api/undo")
+        resp = client.delete("/api/undo", headers=AUTH_HEADER)
         assert resp.status_code == 200
 
     def test_undo_nothing_returns_404(self, client):
-        resp = client.delete("/api/undo")
+        resp = client.delete("/api/undo", headers=AUTH_HEADER)
         assert resp.status_code == 404

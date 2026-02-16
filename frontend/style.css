@@ -48,6 +48,7 @@ h1 {
   font-size: 3rem;
   display: block;
   margin-bottom: 0.5rem;
+  color: #9ca3af;
 }
 
 .upload-area input[type="file"] {
@@ -180,4 +181,80 @@ h1 {
 
 .success-badge.active {
   display: block;
+}
+
+.provider-bar {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  justify-content: flex-end;
+}
+
+.provider-bar label {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.provider-bar select {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.login-screen {
+  width: 100%;
+  max-width: 400px;
+  margin-top: 2rem;
+}
+
+.login-screen.hidden {
+  display: none;
+}
+
+.login-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.login-card label {
+  display: block;
+  font-size: 1rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+.login-card input {
+  width: 100%;
+  font-size: 1.5rem;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  text-align: center;
+  letter-spacing: 0.3em;
+  margin-bottom: 1rem;
+}
+
+.btn-login {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  background: #2563eb;
+  color: #fff;
+}
+
+.login-card .error-msg {
+  margin-top: 0.75rem;
+  width: 100%;
 }

@@ -17,6 +17,7 @@ def env_vars(monkeypatch):
     monkeypatch.setenv("GOOGLE_SHEETS_ID", "test-sheet-id")
     monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "test_sa.json")
     monkeypatch.setenv("VISION_PROVIDER", "claude")
+    monkeypatch.setenv("AUTH_TOKEN", "test-pin")
 
 
 @pytest.fixture

@@ -11,9 +11,23 @@
 <body>
   <h1>Receipt Processor</h1>
 
-  <div class="upload-area" id="uploadArea">
+  <div class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <label for="pinInput">Enter PIN to continue</label>
+      <input type="password" id="pinInput" placeholder="PIN" inputmode="numeric" autocomplete="off">
+      <button class="btn btn-login" id="btnLogin">Login</button>
+      <div class="error-msg" id="loginError"></div>
+    </div>
+  </div>
+
+  <div class="provider-bar" id="providerBar" style="display:none">
+    <label for="providerSelect">AI:</label>
+    <select id="providerSelect"></select>
+  </div>
+
+  <div class="upload-area" id="uploadArea" style="display:none">
     <label for="fileInput">
-      <span class="icon">📸</span>
+      <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48" height="48"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/><path d="M9 2 7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
       Tap to scan a receipt
     </label>
     <input type="file" id="fileInput" accept="image/*" capture="environment">

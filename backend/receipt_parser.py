@@ -160,6 +160,8 @@ _PROVIDERS = {
     "grok": _parse_with_grok,
 }
 
+AVAILABLE_PROVIDERS = list(_PROVIDERS.keys())
+
 
 def parse_receipt(
     image_bytes: bytes,

@@ -1,3 +1,9 @@
+const loginScreen = document.getElementById("loginScreen");
+const pinInput = document.getElementById("pinInput");
+const btnLogin = document.getElementById("btnLogin");
+const loginError = document.getElementById("loginError");
+const providerBar = document.getElementById("providerBar");
+const providerSelect = document.getElementById("providerSelect");
 const uploadArea = document.getElementById("uploadArea");
 const fileInput = document.getElementById("fileInput");
 const spinner = document.getElementById("spinner");
@@ -15,11 +21,85 @@ const btnNew = document.getElementById("btnNew");
 
 let currentRow = null;
 
-// Load categories and payment methods from backend
+// --- Auth ---
+
+function getToken() {
+  return localStorage.getItem("auth_token") || "";
+}
+
+function authHeaders() {
+  return { Authorization: `Bearer ${getToken()}` };
+}
+
+async function tryLogin(pin) {
+  const resp = await fetch("/api/config", {
+    headers: { Authorization: `Bearer ${pin}` },
+  });
+  if (resp.status === 401) return false;
+  if (!resp.ok) return false;
+  localStorage.setItem("auth_token", pin);
+  return true;
+}
+
+function showApp() {
+  loginScreen.classList.add("hidden");
+  providerBar.style.display = "";
+  uploadArea.style.display = "";
+  loadConfig();
+}
+
+async function checkAuth() {
+  const token = getToken();
+  if (!token) return;
+  try {
+    const resp = await fetch("/api/config", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (resp.ok) {
+      showApp();
+    } else {
+      localStorage.removeItem("auth_token");
+    }
+  } catch {
+    // Network error — show login screen
+  }
+}
+
+btnLogin.addEventListener("click", async () => {
+  const pin = pinInput.value.trim();
+  if (!pin) return;
+
+  btnLogin.disabled = true;
+  try {
+    const ok = await tryLogin(pin);
+    if (ok) {
+      showApp();
+    } else {
+      loginError.textContent = "Wrong PIN";
+      loginError.classList.add("active");
+      setTimeout(() => loginError.classList.remove("active"), 3000);
+    }
+  } catch {
+    loginError.textContent = "Connection error";
+    loginError.classList.add("active");
+  } finally {
+    btnLogin.disabled = false;
+  }
+});
+
+pinInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") btnLogin.click();
+});
+
+// --- Config ---
+
 async function loadConfig() {
   try {
-    const resp = await fetch("/api/config");
+    const resp = await fetch("/api/config", { headers: authHeaders() });
     const config = await resp.json();
+
+    resCategory.innerHTML = "";
+    resPayment.innerHTML = "";
 
     config.categories.forEach((cat) => {
       const opt = document.createElement("option");
@@ -28,10 +108,9 @@ async function loadConfig() {
       resCategory.appendChild(opt);
     });
 
-    // Add empty option first for payment
     const emptyOpt = document.createElement("option");
     emptyOpt.value = "";
-    emptyOpt.textContent = "—";
+    emptyOpt.textContent = "\u2014";
     resPayment.appendChild(emptyOpt);
 
     config.payment_methods.forEach((pm) => {
@@ -40,10 +119,22 @@ async function loadConfig() {
       opt.textContent = pm;
       resPayment.appendChild(opt);
     });
+
+    // Populate provider selector
+    providerSelect.innerHTML = "";
+    (config.providers || []).forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      providerSelect.appendChild(opt);
+    });
+    providerSelect.value = config.default_provider || "claude";
   } catch (e) {
     console.error("Failed to load config:", e);
   }
 }
+
+// --- UI helpers ---
 
 function showError(msg) {
   errorMsg.textContent = msg;
@@ -60,6 +151,8 @@ function resetUI() {
   currentRow = null;
 }
 
+// --- Upload ---
+
 async function uploadFile(file) {
   uploadArea.style.display = "none";
   spinner.classList.add("active");
@@ -69,12 +162,20 @@ async function uploadFile(file) {
 
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("provider", providerSelect.value);
 
   try {
     const resp = await fetch("/api/upload", {
       method: "POST",
+      headers: authHeaders(),
       body: formData,
     });
+
+    if (resp.status === 401) {
+      localStorage.removeItem("auth_token");
+      location.reload();
+      return;
+    }
 
     if (!resp.ok) {
       const err = await resp.json();
@@ -84,7 +185,6 @@ async function uploadFile(file) {
     const result = await resp.json();
     currentRow = result.row;
 
-    // Populate result card
     resDate.textContent = result.data.date;
     resEur.textContent = result.data.total_eur.toFixed(2);
     resBgn.textContent = result.data.total_bgn.toFixed(2);
@@ -102,7 +202,6 @@ async function uploadFile(file) {
   }
 }
 
-// File input change
 fileInput.addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (file) uploadFile(file);
@@ -123,53 +222,56 @@ uploadArea.addEventListener("drop", (e) => {
   if (file && file.type.startsWith("image/")) uploadFile(file);
 });
 
-// Inline editing: category
+// --- Inline editing ---
+
 resCategory.addEventListener("change", async () => {
   if (!currentRow) return;
   try {
     await fetch(`/api/entry/${currentRow}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ column: "Категория", value: resCategory.value }),
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ column: "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f", value: resCategory.value }),
     });
   } catch (e) {
     showError("Failed to update category");
   }
 });
 
-// Inline editing: payment
 resPayment.addEventListener("change", async () => {
   if (!currentRow) return;
   try {
     await fetch(`/api/entry/${currentRow}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ column: "Плащане", value: resPayment.value }),
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ column: "\u041f\u043b\u0430\u0449\u0430\u043d\u0435", value: resPayment.value }),
     });
   } catch (e) {
     showError("Failed to update payment method");
   }
 });
 
-// Inline editing: notes (on blur)
 resNotes.addEventListener("blur", async () => {
   if (!currentRow) return;
   try {
     await fetch(`/api/entry/${currentRow}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ column: "Пояснения", value: resNotes.value }),
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ column: "\u041f\u043e\u044f\u0441\u043d\u0435\u043d\u0438\u044f", value: resNotes.value }),
     });
   } catch (e) {
     showError("Failed to update notes");
   }
 });
 
-// Undo
+// --- Undo ---
+
 btnUndo.addEventListener("click", async () => {
   if (!currentRow) return;
   try {
-    const resp = await fetch(`/api/entry/${currentRow}`, { method: "DELETE" });
+    const resp = await fetch(`/api/entry/${currentRow}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
     if (!resp.ok) throw new Error("Delete failed");
     resetUI();
   } catch (e) {
@@ -177,8 +279,7 @@ btnUndo.addEventListener("click", async () => {
   }
 });
 
-// New receipt
 btnNew.addEventListener("click", resetUI);
 
-// Init
-loadConfig();
+// --- Init ---
+checkAuth();
