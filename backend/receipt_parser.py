@@ -33,7 +33,7 @@ Rules:
 - category MUST be exactly one from the allowed list — pick the best match
 - payment_method: pick from allowed list if visible on receipt, otherwise null
 - notes: short Bulgarian summary of what was purchased
-- bulstat: the seller's БУЛСТАТ or ЕИК number (usually 9-13 digits, often near the top of the receipt). Return null if not visible.
+- bulstat: the seller's VAT/tax ID number. On Bulgarian receipts it appears after "ЗДДС Но:", "ИН по ЗДДС:", "ЕИК:", or "БУЛСТАТ:" and typically looks like "BG123456789". Return the full value including the BG prefix (e.g. "BG123456789"). Return null if not visible.
 - If the receipt is unclear, make your best guess
 """
 
@@ -70,8 +70,9 @@ def _validate_receipt_data(data: dict) -> ReceiptData:
 
     bulstat = data.get("bulstat")
     if bulstat:
-        # Normalize: keep only digits
-        bulstat = re.sub(r"\D", "", str(bulstat))
+        # Normalize: strip "BG" prefix (common on receipts), then keep only digits
+        bulstat = re.sub(r"^BG\s*", "", str(bulstat).strip(), flags=re.IGNORECASE)
+        bulstat = re.sub(r"\D", "", bulstat)
         if not bulstat:
             bulstat = None
 

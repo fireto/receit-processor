@@ -81,6 +81,11 @@ class TestValidateReceiptData:
         receipt = _validate_receipt_data(data)
         assert receipt.bulstat == "123456789"
 
+    def test_bulstat_bg_prefix_stripped(self):
+        data = {"bulstat": "BG123456789"}
+        receipt = _validate_receipt_data(data)
+        assert receipt.bulstat == "123456789"
+
     def test_bulstat_null_stays_none(self):
         data = {"bulstat": None}
         receipt = _validate_receipt_data(data)
