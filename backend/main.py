@@ -53,6 +53,14 @@ class UpdateRequest(BaseModel):
     value: str
 
 
+class ManualEntryRequest(BaseModel):
+    date: str
+    total_eur: float
+    category: str
+    payment_method: str | None = None
+    notes: str = ""
+
+
 @app.get("/api/config")
 def get_config():
     """Return categories and payment methods for the frontend."""
@@ -130,6 +138,40 @@ async def upload_receipt(
             "bulstat": receipt.bulstat,
         },
         "qr": qr_data,
+    }
+
+
+@app.post("/api/manual")
+def manual_entry(req: ManualEntryRequest):
+    """Create a manual expense entry and write to Google Sheets."""
+    global _last_written_row
+
+    receipt = ReceiptData(
+        date=req.date,
+        total_eur=req.total_eur,
+        category=req.category,
+        payment_method=req.payment_method or None,
+        notes=req.notes,
+    )
+
+    try:
+        row_number = append_expense(receipt)
+        _last_written_row = row_number
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to write to Google Sheets: {e}"
+        )
+
+    return {
+        "row": row_number,
+        "data": {
+            "date": receipt.date,
+            "total_eur": receipt.total_eur,
+            "total_bgn": receipt.total_bgn,
+            "category": receipt.category,
+            "payment_method": receipt.payment_method,
+            "notes": receipt.notes,
+        },
     }
 
 

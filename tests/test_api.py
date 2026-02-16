@@ -151,6 +151,65 @@ class TestUpload:
         assert "google sheets" in resp.json()["detail"].lower()
 
 
+class TestManualEntry:
+    def test_manual_entry_success(self, client):
+        resp = client.post(
+            "/api/manual",
+            headers=AUTH_HEADER,
+            json={
+                "date": "16.02.2026",
+                "total_eur": 15.50,
+                "category": "Храна",
+                "payment_method": "Cash",
+                "notes": "ръчен запис",
+            },
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["row"] == 42
+        assert data["data"]["date"] == "16.02.2026"
+        assert data["data"]["total_eur"] == 15.50
+        assert data["data"]["total_bgn"] > 0
+        assert data["data"]["category"] == "Храна"
+        assert data["data"]["payment_method"] == "Cash"
+        assert data["data"]["notes"] == "ръчен запис"
+        client._mock_append.assert_called_once()
+
+    def test_manual_entry_minimal(self, client):
+        resp = client.post(
+            "/api/manual",
+            headers=AUTH_HEADER,
+            json={"date": "16.02.2026", "total_eur": 5.0, "category": "Разни"},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["data"]["payment_method"] is None
+        assert data["data"]["notes"] == ""
+
+    def test_manual_entry_sheets_failure(self, client):
+        client._mock_append.side_effect = Exception("Sheets API error")
+        resp = client.post(
+            "/api/manual",
+            headers=AUTH_HEADER,
+            json={"date": "16.02.2026", "total_eur": 5.0, "category": "Разни"},
+        )
+
+        assert resp.status_code == 500
+        assert "google sheets" in resp.json()["detail"].lower()
+
+    def test_manual_entry_enables_undo(self, client):
+        client.post(
+            "/api/manual",
+            headers=AUTH_HEADER,
+            json={"date": "16.02.2026", "total_eur": 5.0, "category": "Разни"},
+        )
+
+        resp = client.delete("/api/undo", headers=AUTH_HEADER)
+        assert resp.status_code == 200
+
+
 class TestUpdateEntry:
     def test_update_category(self, client):
         resp = client.patch(
