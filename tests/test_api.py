@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.config import CATEGORIES, PAYMENT_METHODS, ReceiptData
+from backend.config import CATEGORIES, PAYMENT_METHODS, VERSION, ReceiptData
 
 TEST_TOKEN = "test-pin"
 AUTH_HEADER = {"Authorization": f"Bearer {TEST_TOKEN}"}
@@ -57,6 +57,7 @@ class TestGetConfig:
         resp = client.get("/api/config", headers=AUTH_HEADER)
         assert resp.status_code == 200
         data = resp.json()
+        assert data["version"] == VERSION
         assert data["categories"] == CATEGORIES
         assert data["payment_methods"] == PAYMENT_METHODS
         assert "providers" in data

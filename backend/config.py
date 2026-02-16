@@ -3,6 +3,10 @@
 from dataclasses import dataclass
 from typing import Optional
 
+VERSION_MAJOR = 1
+VERSION_MINOR = 3
+VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}"
+
 # Bulgarian Lev to Euro fixed rate (currency board, pre-2026)
 BGN_PER_EUR = 1.95583
 

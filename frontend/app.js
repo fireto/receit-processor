@@ -111,6 +111,10 @@ async function loadConfig() {
     const resp = await fetch("/api/config", { headers: authHeaders() });
     const config = await resp.json();
 
+    if (config.version) {
+      document.getElementById("appVersion").textContent = "v" + config.version;
+    }
+
     resCategory.innerHTML = "";
     resPayment.innerHTML = "";
 

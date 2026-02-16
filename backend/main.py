@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend.config import CATEGORIES, PAYMENT_METHODS, ReceiptData
+from backend.config import CATEGORIES, PAYMENT_METHODS, VERSION, ReceiptData
 from backend.receipt_parser import AVAILABLE_PROVIDERS, decode_receipt_qr, parse_receipt
 from backend.sheets import (
     append_expense,
@@ -65,6 +65,7 @@ class ManualEntryRequest(BaseModel):
 def get_config():
     """Return categories and payment methods for the frontend."""
     return {
+        "version": VERSION,
         "categories": CATEGORIES,
         "payment_methods": PAYMENT_METHODS,
         "providers": AVAILABLE_PROVIDERS,
