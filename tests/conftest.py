@@ -41,6 +41,7 @@ def sample_api_response():
         "category": "Храна",
         "payment_method": "Revolut",
         "notes": "хляб, мляко, сирене",
+        "bulstat": "123456789",
     }
 
 
@@ -76,6 +77,6 @@ def mock_worksheet():
     ws.append_row = MagicMock()
     ws.update_cell = MagicMock()
     ws.delete_rows = MagicMock()
-    ws.get_all_values = MagicMock(return_value=[["header"] * 9, ["data"] * 9])
+    ws.get_all_values = MagicMock(return_value=[["header"] * 10, ["data"] * 10])
     ws.row_count = 2
     return ws

@@ -1,11 +1,15 @@
-"""Receipt parsing via vision AI models (Claude, Gemini, Grok)."""
+"""Receipt parsing via vision AI models (Claude, Gemini, Grok) + QR decoding."""
 
 import base64
+import io
 import json
+import logging
 import os
 import re
 
 from backend.config import CATEGORIES, PAYMENT_METHODS, ReceiptData
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are a receipt parser for Bulgarian household expenses.
 Given a photo of a receipt, extract the following information and return ONLY valid JSON (no markdown, no code fences):
@@ -15,7 +19,8 @@ Given a photo of a receipt, extract the following information and return ONLY va
   "total_eur": 12.34,
   "category": "one of the allowed categories",
   "payment_method": "one of the allowed payment methods or null",
-  "notes": "brief description of main items in Bulgarian, 3-5 words"
+  "notes": "brief description of main items in Bulgarian, 3-5 words",
+  "bulstat": "company БУЛСТАТ/ЕИК number or null"
 }}
 
 Allowed categories: {categories}
@@ -28,6 +33,7 @@ Rules:
 - category MUST be exactly one from the allowed list — pick the best match
 - payment_method: pick from allowed list if visible on receipt, otherwise null
 - notes: short Bulgarian summary of what was purchased
+- bulstat: the seller's БУЛСТАТ or ЕИК number (usually 9-13 digits, often near the top of the receipt). Return null if not visible.
 - If the receipt is unclear, make your best guess
 """
 
@@ -62,12 +68,20 @@ def _validate_receipt_data(data: dict) -> ReceiptData:
     if payment and payment not in PAYMENT_METHODS:
         payment = None
 
+    bulstat = data.get("bulstat")
+    if bulstat:
+        # Normalize: keep only digits
+        bulstat = re.sub(r"\D", "", str(bulstat))
+        if not bulstat:
+            bulstat = None
+
     return ReceiptData(
         date=data.get("date", ""),
         total_eur=float(data.get("total_eur", 0)),
         category=category,
         payment_method=payment,
         notes=data.get("notes", ""),
+        bulstat=bulstat,
     )
 
 
@@ -152,6 +166,48 @@ def _parse_with_grok(image_bytes: bytes, mime_type: str) -> dict:
         ],
     )
     return _parse_json_response(response.choices[0].message.content)
+
+
+def decode_receipt_qr(image_bytes: bytes) -> dict | None:
+    """Decode QR code from a receipt image.
+
+    Returns dict with keys: fp_number, receipt_number, date, time, amount.
+    Returns None if no QR code found or decoding fails.
+    """
+    try:
+        from PIL import Image
+        from pyzbar.pyzbar import decode as pyzbar_decode
+    except ImportError:
+        logger.warning("pyzbar or Pillow not installed, skipping QR decode")
+        return None
+
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+        codes = pyzbar_decode(image)
+    except Exception as e:
+        logger.warning("Failed to decode QR from image: %s", e)
+        return None
+
+    for code in codes:
+        if code.type != "QRCODE":
+            continue
+        try:
+            text = code.data.decode("utf-8")
+            parts = text.split("*")
+            if len(parts) < 4:
+                continue
+            return {
+                "fp_number": parts[0],
+                "receipt_number": parts[1],
+                "date": parts[2],
+                "time": parts[3] if len(parts) > 3 else None,
+                "amount": float(parts[4]) if len(parts) > 4 else None,
+            }
+        except (ValueError, IndexError) as e:
+            logger.warning("Failed to parse QR data '%s': %s", text, e)
+            continue
+
+    return None
 
 
 _PROVIDERS = {

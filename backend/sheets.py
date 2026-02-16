@@ -59,3 +59,36 @@ def get_last_row_number() -> int:
     """Get the number of the last row with data."""
     ws = _get_worksheet()
     return len(ws.get_all_values())
+
+
+def lookup_category_by_bulstat(bulstat: str) -> str | None:
+    """Find the most common category for a given БУЛСТАТ from previous entries.
+
+    Returns the category string or None if no previous entries found.
+    """
+    if not bulstat:
+        return None
+
+    ws = _get_worksheet()
+    rows = ws.get_all_values()
+    if len(rows) < 2:  # Only header or empty
+        return None
+
+    header = rows[0]
+    try:
+        bulstat_col = header.index("БУЛСТАТ")
+        category_col = header.index("Категория")
+    except ValueError:
+        return None
+
+    categories: dict[str, int] = {}
+    for row in rows[1:]:
+        if len(row) > bulstat_col and row[bulstat_col] == bulstat:
+            if len(row) > category_col and row[category_col]:
+                cat = row[category_col]
+                categories[cat] = categories.get(cat, 0) + 1
+
+    if not categories:
+        return None
+
+    return max(categories, key=categories.get)

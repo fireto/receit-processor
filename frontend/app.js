@@ -16,6 +16,9 @@ const resBgn = document.getElementById("resBgn");
 const resCategory = document.getElementById("resCategory");
 const resPayment = document.getElementById("resPayment");
 const resNotes = document.getElementById("resNotes");
+const resBulstatRow = document.getElementById("resBulstatRow");
+const resBulstat = document.getElementById("resBulstat");
+const qrBadge = document.getElementById("qrBadge");
 const btnUndo = document.getElementById("btnUndo");
 const btnNew = document.getElementById("btnNew");
 
@@ -191,6 +194,25 @@ async function uploadFile(file) {
     resCategory.value = result.data.category;
     resPayment.value = result.data.payment_method || "";
     resNotes.value = result.data.notes;
+
+    // БУЛСТАТ
+    if (result.data.bulstat) {
+      resBulstat.textContent = result.data.bulstat;
+      resBulstatRow.style.display = "";
+    } else {
+      resBulstatRow.style.display = "none";
+    }
+
+    // QR validation badge
+    if (result.qr) {
+      const qrMatch = result.qr.amount !== null &&
+        Math.abs(result.qr.amount - result.data.total_eur) < 0.02;
+      qrBadge.textContent = qrMatch ? "QR verified" : "QR mismatch";
+      qrBadge.className = "qr-badge " + (qrMatch ? "qr-ok" : "qr-warn");
+      qrBadge.style.display = "";
+    } else {
+      qrBadge.style.display = "none";
+    }
 
     successBadge.classList.add("active");
     resultCard.classList.add("active");

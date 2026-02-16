@@ -21,14 +21,20 @@ def client():
     with patch("backend.main.append_expense") as mock_append, \
          patch("backend.main.update_cell") as mock_update, \
          patch("backend.main.delete_row") as mock_delete, \
-         patch("backend.main.get_last_row_number") as mock_last:
+         patch("backend.main.get_last_row_number") as mock_last, \
+         patch("backend.main.lookup_category_by_bulstat") as mock_lookup, \
+         patch("backend.main.decode_receipt_qr") as mock_qr:
         mock_append.return_value = 42
         mock_last.return_value = 42
+        mock_lookup.return_value = None
+        mock_qr.return_value = None
 
         test_client = TestClient(backend.main.app)
         test_client._mock_append = mock_append
         test_client._mock_update = mock_update
         test_client._mock_delete = mock_delete
+        test_client._mock_lookup = mock_lookup
+        test_client._mock_qr = mock_qr
         yield test_client
 
 
@@ -67,6 +73,7 @@ class TestUpload:
             category="Храна",
             payment_method="Revolut",
             notes="хляб, мляко",
+            bulstat="123456789",
         )
 
         resp = client.post(
@@ -81,7 +88,29 @@ class TestUpload:
         assert data["data"]["date"] == "15.02.2026"
         assert data["data"]["total_eur"] == 23.45
         assert data["data"]["category"] == "Храна"
+        assert data["data"]["bulstat"] == "123456789"
+        assert "qr" in data
         client._mock_append.assert_called_once()
+
+    @patch("backend.main.parse_receipt")
+    def test_upload_bulstat_category_automapping(self, mock_parse, client, sample_image_bytes):
+        mock_parse.return_value = ReceiptData(
+            date="15.02.2026",
+            total_eur=10.0,
+            category="Разни",
+            bulstat="123456789",
+        )
+        client._mock_lookup.return_value = "Храна"
+
+        resp = client.post(
+            "/api/upload",
+            headers=AUTH_HEADER,
+            files={"file": ("receipt.jpg", sample_image_bytes, "image/jpeg")},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["data"]["category"] == "Храна"
+        client._mock_lookup.assert_called_once_with("123456789")
 
     def test_upload_rejects_non_image(self, client):
         resp = client.post(

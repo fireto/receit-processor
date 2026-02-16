@@ -5,7 +5,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from backend.config import SHEET_COLUMNS, ReceiptData
-from backend.sheets import append_expense, delete_row, get_last_row_number, update_cell
+from backend.sheets import (
+    append_expense,
+    delete_row,
+    get_last_row_number,
+    lookup_category_by_bulstat,
+    update_cell,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -51,11 +57,11 @@ class TestAppendExpense:
 
     def test_returns_row_number(self, mock_gspread, sample_receipt_data):
         # get_all_values returns header + 1 data row = 2 rows, then append adds 1 → 3
-        mock_gspread.get_all_values.return_value = [["h"] * 9, ["d"] * 9, ["new"] * 9]
+        mock_gspread.get_all_values.return_value = [["h"] * 10, ["d"] * 10, ["new"] * 10]
         row_num = append_expense(sample_receipt_data)
         assert row_num == 3
 
-    def test_row_has_9_columns(self, mock_gspread, sample_receipt_data):
+    def test_row_has_correct_column_count(self, mock_gspread, sample_receipt_data):
         append_expense(sample_receipt_data)
         row = mock_gspread.append_row.call_args[0][0]
         assert len(row) == len(SHEET_COLUMNS)
@@ -97,5 +103,42 @@ class TestDeleteRow:
 
 class TestGetLastRowNumber:
     def test_returns_row_count(self, mock_gspread):
-        mock_gspread.get_all_values.return_value = [["h"] * 9, ["d"] * 9, ["d"] * 9]
+        mock_gspread.get_all_values.return_value = [["h"] * 10, ["d"] * 10, ["d"] * 10]
         assert get_last_row_number() == 3
+
+
+class TestLookupCategoryByBulstat:
+    def test_returns_none_for_empty_bulstat(self, mock_gspread):
+        assert lookup_category_by_bulstat("") is None
+        assert lookup_category_by_bulstat(None) is None
+
+    def test_returns_none_when_no_matches(self, mock_gspread):
+        mock_gspread.get_all_values.return_value = [
+            SHEET_COLUMNS,
+            ["01.01.2026", "Храна", "19,56", "10,00", "", "Cash", "", "", "тест", "999999999"],
+        ]
+        assert lookup_category_by_bulstat("123456789") is None
+
+    def test_returns_category_for_matching_bulstat(self, mock_gspread):
+        mock_gspread.get_all_values.return_value = [
+            SHEET_COLUMNS,
+            ["01.01.2026", "Храна", "19,56", "10,00", "", "Cash", "", "", "тест", "123456789"],
+            ["02.01.2026", "Козметика", "9,78", "5,00", "", "Cash", "", "", "шампоан", "999999999"],
+        ]
+        assert lookup_category_by_bulstat("123456789") == "Храна"
+
+    def test_returns_most_frequent_category(self, mock_gspread):
+        mock_gspread.get_all_values.return_value = [
+            SHEET_COLUMNS,
+            ["01.01.2026", "Храна", "19,56", "10,00", "", "", "", "", "", "123456789"],
+            ["02.01.2026", "Козметика", "9,78", "5,00", "", "", "", "", "", "123456789"],
+            ["03.01.2026", "Храна", "15,00", "7,67", "", "", "", "", "", "123456789"],
+        ]
+        assert lookup_category_by_bulstat("123456789") == "Храна"
+
+    def test_returns_none_when_header_missing_bulstat(self, mock_gspread):
+        mock_gspread.get_all_values.return_value = [
+            ["Дата", "Категория", "Цена лв"],  # No БУЛСТАТ column
+            ["01.01.2026", "Храна", "19,56"],
+        ]
+        assert lookup_category_by_bulstat("123456789") is None

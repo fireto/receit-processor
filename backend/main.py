@@ -1,6 +1,7 @@
 """FastAPI application: receipt upload, edit, undo endpoints."""
 
 import hmac
+import logging
 import os
 from pathlib import Path
 
@@ -11,8 +12,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.config import CATEGORIES, PAYMENT_METHODS, ReceiptData
-from backend.receipt_parser import AVAILABLE_PROVIDERS, parse_receipt
-from backend.sheets import append_expense, delete_row, get_last_row_number, update_cell
+from backend.receipt_parser import AVAILABLE_PROVIDERS, decode_receipt_qr, parse_receipt
+from backend.sheets import (
+    append_expense,
+    delete_row,
+    get_last_row_number,
+    lookup_category_by_bulstat,
+    update_cell,
+)
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -69,12 +78,37 @@ async def upload_receipt(
     image_bytes = await file.read()
     mime_type = file.content_type
 
+    # Decode QR code (fast, local — runs before AI call)
+    qr_data = decode_receipt_qr(image_bytes)
+
     try:
         receipt = parse_receipt(image_bytes, mime_type, provider=provider)
     except Exception as e:
         raise HTTPException(
             status_code=422, detail=f"Failed to parse receipt: {e}"
         )
+
+    # Cross-validate QR data with AI output
+    if qr_data and qr_data.get("amount") is not None:
+        diff = abs(receipt.total_eur - qr_data["amount"])
+        if diff > 0.01:
+            logger.warning(
+                "QR amount (%.2f) differs from AI-parsed amount (%.2f) by %.2f",
+                qr_data["amount"], receipt.total_eur, diff,
+            )
+
+    # БУЛСТАТ → category auto-mapping
+    if receipt.bulstat:
+        try:
+            historical_cat = lookup_category_by_bulstat(receipt.bulstat)
+            if historical_cat and receipt.category == "Разни":
+                logger.info(
+                    "Auto-mapped БУЛСТАТ %s to category '%s' from history",
+                    receipt.bulstat, historical_cat,
+                )
+                receipt.category = historical_cat
+        except Exception as e:
+            logger.warning("Failed to lookup category by БУЛСТАТ: %s", e)
 
     try:
         row_number = append_expense(receipt)
@@ -93,7 +127,9 @@ async def upload_receipt(
             "category": receipt.category,
             "payment_method": receipt.payment_method,
             "notes": receipt.notes,
+            "bulstat": receipt.bulstat,
         },
+        "qr": qr_data,
     }
 
 

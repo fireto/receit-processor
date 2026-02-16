@@ -9,6 +9,7 @@ from backend.config import BGN_PER_EUR, CATEGORIES, ReceiptData
 from backend.receipt_parser import (
     _parse_json_response,
     _validate_receipt_data,
+    decode_receipt_qr,
     parse_receipt,
 )
 
@@ -48,6 +49,7 @@ class TestValidateReceiptData:
         assert receipt.category == "Храна"
         assert receipt.payment_method == "Revolut"
         assert receipt.notes == "хляб, мляко, сирене"
+        assert receipt.bulstat == "123456789"
 
     def test_unknown_category_falls_back_to_razni(self):
         data = {"date": "01.01.2026", "total_eur": 5.0, "category": "NonExistent"}
@@ -72,6 +74,17 @@ class TestValidateReceiptData:
         assert receipt.category == "Разни"
         assert receipt.payment_method is None
         assert receipt.notes == ""
+        assert receipt.bulstat is None
+
+    def test_bulstat_normalized_to_digits(self):
+        data = {"bulstat": "BG 123-456-789"}
+        receipt = _validate_receipt_data(data)
+        assert receipt.bulstat == "123456789"
+
+    def test_bulstat_null_stays_none(self):
+        data = {"bulstat": None}
+        receipt = _validate_receipt_data(data)
+        assert receipt.bulstat is None
 
     def test_all_categories_are_valid(self):
         for cat in CATEGORIES:
@@ -97,7 +110,7 @@ class TestBgnCalculation:
 class TestSheetRow:
     def test_to_sheet_row_format(self, sample_receipt_data):
         row = sample_receipt_data.to_sheet_row()
-        assert len(row) == 9
+        assert len(row) == 10
         assert row[0] == "15.02.2026"  # date
         assert row[1] == "Храна"  # category
         assert "," in row[2]  # BGN with comma decimal
@@ -107,6 +120,7 @@ class TestSheetRow:
         assert row[6] == ""  # extra fee
         assert row[7] == ""  # payback
         assert row[8] == "хляб, мляко, сирене"  # notes
+        assert row[9] == ""  # bulstat (not set in fixture)
 
     def test_to_sheet_row_no_payment(self):
         receipt = ReceiptData(
@@ -160,3 +174,44 @@ class TestParseReceiptProviders:
         with patch.dict("backend.receipt_parser._PROVIDERS", {"claude": mock_fn}):
             with pytest.raises(Exception, match="API error"):
                 parse_receipt(sample_image_bytes, "image/jpeg", provider="claude")
+
+
+class TestDecodeReceiptQr:
+    def test_returns_none_for_image_without_qr(self, sample_image_bytes):
+        result = decode_receipt_qr(sample_image_bytes)
+        assert result is None
+
+    def test_returns_none_when_pyzbar_not_available(self, sample_image_bytes):
+        with patch.dict("sys.modules", {"pyzbar": None, "pyzbar.pyzbar": None}):
+            result = decode_receipt_qr(sample_image_bytes)
+            assert result is None
+
+    def test_parses_valid_qr_data(self):
+        """Test QR parsing with mocked pyzbar output."""
+        mock_code = MagicMock()
+        mock_code.type = "QRCODE"
+        mock_code.data = b"FP12345*0001*15.02.2026*14:30*23.45"
+
+        # Mock PIL and pyzbar via sys.modules since libzbar
+        # may not be installed on the test host (only in Docker).
+        # `from PIL import Image` reads sys.modules["PIL"].Image
+        # `from pyzbar.pyzbar import decode` reads sys.modules["pyzbar.pyzbar"].decode
+        mock_pil = MagicMock()
+        mock_pyzbar = MagicMock()
+        mock_pyzbar_pyzbar = MagicMock()
+        mock_pyzbar_pyzbar.decode.return_value = [mock_code]
+
+        with patch.dict("sys.modules", {
+            "PIL": mock_pil,
+            "PIL.Image": mock_pil.Image,
+            "pyzbar": mock_pyzbar,
+            "pyzbar.pyzbar": mock_pyzbar_pyzbar,
+        }):
+            result = decode_receipt_qr(b"fake-image")
+
+        assert result is not None
+        assert result["fp_number"] == "FP12345"
+        assert result["receipt_number"] == "0001"
+        assert result["date"] == "15.02.2026"
+        assert result["time"] == "14:30"
+        assert result["amount"] == 23.45

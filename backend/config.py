@@ -54,6 +54,7 @@ SHEET_COLUMNS = [
     "Допълн. такса",
     "Payback",
     "Пояснения",
+    "БУЛСТАТ",
 ]
 
 
@@ -64,6 +65,7 @@ class ReceiptData:
     category: str
     payment_method: Optional[str] = None
     notes: str = ""
+    bulstat: Optional[str] = None
 
     @property
     def total_bgn(self) -> float:
@@ -81,4 +83,5 @@ class ReceiptData:
             "",  # Допълн. такса
             "",  # Payback
             self.notes,
+            self.bulstat or "",
         ]
