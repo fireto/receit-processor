@@ -1,11 +1,11 @@
-"""Configuration: categories, payment methods, column mapping, constants."""
+"""Configuration: categories, column mapping, constants."""
 
 from dataclasses import dataclass
 from typing import Optional
 
 VERSION_MAJOR = 1
-VERSION_MINOR = 3
-VERSION_PATCH = 2
+VERSION_MINOR = 4
+VERSION_PATCH = 0
 VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"
 
 # Bulgarian Lev to Euro fixed rate (currency board, pre-2026)
@@ -34,20 +34,6 @@ CATEGORIES = [
     "Разходи апартамент",
 ]
 
-PAYMENT_METHODS = [
-    "ВиртуаленPOS",
-    "Cash",
-    "Diners",
-    "ePay",
-    "PayPal",
-    "RaiCard",
-    "Revolut",
-    "FIB 0889",
-    "Ваучери за храна",
-    "ОББ",
-    "Bulbank 4416",
-]
-
 # Google Sheet column order
 SHEET_COLUMNS = [
     "Дата",
@@ -71,6 +57,7 @@ class ReceiptData:
     payment_method: Optional[str] = None
     notes: str = ""
     bulstat: Optional[str] = None
+    card_last4: Optional[str] = None  # not stored in sheet, used for matching
 
     @property
     def total_bgn(self) -> float:

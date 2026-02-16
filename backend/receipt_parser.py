@@ -7,7 +7,7 @@ import logging
 import os
 import re
 
-from backend.config import CATEGORIES, PAYMENT_METHODS, ReceiptData
+from backend.config import CATEGORIES, ReceiptData
 
 logger = logging.getLogger(__name__)
 
@@ -18,20 +18,18 @@ Given a photo of a receipt, extract the following information and return ONLY va
   "date": "DD.MM.YYYY",
   "total_eur": 12.34,
   "category": "one of the allowed categories",
-  "payment_method": "one of the allowed payment methods or null",
+  "card_last4": "last 4 digits of payment card or null",
   "notes": "brief description of main items in Bulgarian, 3-5 words",
   "bulstat": "company БУЛСТАТ/ЕИК number or null"
 }}
 
 Allowed categories: {categories}
 
-Allowed payment methods: {payment_methods}
-
 Rules:
 - Date format must be DD.MM.YYYY
 - total_eur must be the final total as a number (EUR amount)
 - category MUST be exactly one from the allowed list — pick the best match
-- payment_method: pick from allowed list if visible on receipt, otherwise null
+- card_last4: if the receipt shows a card payment (look for "Карта:", "Card:", or masked card number like "****-****-****-0889"), extract the last 4 unmasked digits. Return null if paid with cash or card number not visible.
 - notes: short Bulgarian summary of what was purchased
 - bulstat: the seller's VAT/tax ID number. On Bulgarian receipts look for labels like "ЗДДС N:", "ЗДДС No:", "ЗДДС №:", "ЕИК:", or "БУЛСТАТ:". The value typically starts with "BG" followed by 9 digits (e.g. "BG123456789"). Return the full value including the BG prefix. Return null if not visible.
 - If the receipt is unclear, make your best guess
@@ -41,7 +39,6 @@ Rules:
 def _build_prompt() -> str:
     return SYSTEM_PROMPT.format(
         categories=", ".join(CATEGORIES),
-        payment_methods=", ".join(PAYMENT_METHODS),
     )
 
 
@@ -64,10 +61,6 @@ def _validate_receipt_data(data: dict) -> ReceiptData:
     if category not in CATEGORIES:
         category = "Разни"
 
-    payment = data.get("payment_method")
-    if payment and payment not in PAYMENT_METHODS:
-        payment = None
-
     bulstat = data.get("bulstat")
     if bulstat:
         # Normalize: strip "BG" prefix (common on receipts), then keep only digits
@@ -76,13 +69,19 @@ def _validate_receipt_data(data: dict) -> ReceiptData:
         if not bulstat:
             bulstat = None
 
+    card_last4 = data.get("card_last4")
+    if card_last4:
+        card_last4 = re.sub(r"\D", "", str(card_last4))
+        if len(card_last4) != 4:
+            card_last4 = None
+
     return ReceiptData(
         date=data.get("date", ""),
         total_eur=float(data.get("total_eur", 0)),
         category=category,
-        payment_method=payment,
         notes=data.get("notes", ""),
         bulstat=bulstat,
+        card_last4=card_last4,
     )
 
 

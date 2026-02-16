@@ -47,7 +47,6 @@ class TestValidateReceiptData:
         assert receipt.date == "15.02.2026"
         assert receipt.total_eur == 23.45
         assert receipt.category == "Храна"
-        assert receipt.payment_method == "Revolut"
         assert receipt.notes == "хляб, мляко, сирене"
         assert receipt.bulstat == "123456789"
 
@@ -55,16 +54,6 @@ class TestValidateReceiptData:
         data = {"date": "01.01.2026", "total_eur": 5.0, "category": "NonExistent"}
         receipt = _validate_receipt_data(data)
         assert receipt.category == "Разни"
-
-    def test_unknown_payment_method_becomes_none(self):
-        data = {
-            "date": "01.01.2026",
-            "total_eur": 5.0,
-            "category": "Храна",
-            "payment_method": "Bitcoin",
-        }
-        receipt = _validate_receipt_data(data)
-        assert receipt.payment_method is None
 
     def test_missing_fields_use_defaults(self):
         data = {}
@@ -75,6 +64,27 @@ class TestValidateReceiptData:
         assert receipt.payment_method is None
         assert receipt.notes == ""
         assert receipt.bulstat is None
+        assert receipt.card_last4 is None
+
+    def test_card_last4_extracted(self):
+        data = {"card_last4": "0889"}
+        receipt = _validate_receipt_data(data)
+        assert receipt.card_last4 == "0889"
+
+    def test_card_last4_non_digits_stripped(self):
+        data = {"card_last4": "**0889"}
+        receipt = _validate_receipt_data(data)
+        assert receipt.card_last4 == "0889"
+
+    def test_card_last4_wrong_length_becomes_none(self):
+        data = {"card_last4": "12345"}
+        receipt = _validate_receipt_data(data)
+        assert receipt.card_last4 is None
+
+    def test_card_last4_null_stays_none(self):
+        data = {"card_last4": None}
+        receipt = _validate_receipt_data(data)
+        assert receipt.card_last4 is None
 
     def test_bulstat_normalized_to_digits(self):
         data = {"bulstat": "BG 123-456-789"}

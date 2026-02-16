@@ -11,12 +11,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend.config import CATEGORIES, PAYMENT_METHODS, VERSION, ReceiptData
+from backend.config import CATEGORIES, VERSION, ReceiptData
 from backend.receipt_parser import AVAILABLE_PROVIDERS, decode_receipt_qr, parse_receipt
 from backend.sheets import (
     append_expense,
     delete_row,
     get_last_row_number,
+    get_payment_methods,
     lookup_category_by_bulstat,
     update_cell,
 )
@@ -64,10 +65,15 @@ class ManualEntryRequest(BaseModel):
 @app.get("/api/config")
 def get_config():
     """Return categories and payment methods for the frontend."""
+    try:
+        payment_methods = get_payment_methods()
+    except Exception as e:
+        logger.error("Failed to load payment methods from Sheets: %s", e)
+        payment_methods = []
     return {
         "version": VERSION,
         "categories": CATEGORIES,
-        "payment_methods": PAYMENT_METHODS,
+        "payment_methods": payment_methods,
         "providers": AVAILABLE_PROVIDERS,
         "default_provider": os.environ.get("VISION_PROVIDER", "claude"),
     }
@@ -106,6 +112,21 @@ async def upload_receipt(
                 "QR amount (%.2f) differs from AI-parsed amount (%.2f) by %.2f",
                 qr_data["amount"], receipt.total_eur, diff,
             )
+
+    # Card last 4 digits → payment method auto-matching
+    if receipt.card_last4:
+        try:
+            payment_methods = get_payment_methods()
+            for pm in payment_methods:
+                if receipt.card_last4 in pm:
+                    receipt.payment_method = pm
+                    logger.info(
+                        "Auto-matched card ****%s to payment method '%s'",
+                        receipt.card_last4, pm,
+                    )
+                    break
+        except Exception as e:
+            logger.warning("Failed to match card digits to payment method: %s", e)
 
     # БУЛСТАТ → category auto-mapping
     if receipt.bulstat:

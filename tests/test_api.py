@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.config import CATEGORIES, PAYMENT_METHODS, VERSION, ReceiptData
+from backend.config import CATEGORIES, VERSION, ReceiptData
 
 TEST_TOKEN = "test-pin"
 AUTH_HEADER = {"Authorization": f"Bearer {TEST_TOKEN}"}
@@ -23,11 +23,13 @@ def client():
          patch("backend.main.delete_row") as mock_delete, \
          patch("backend.main.get_last_row_number") as mock_last, \
          patch("backend.main.lookup_category_by_bulstat") as mock_lookup, \
-         patch("backend.main.decode_receipt_qr") as mock_qr:
+         patch("backend.main.decode_receipt_qr") as mock_qr, \
+         patch("backend.main.get_payment_methods") as mock_pm:
         mock_append.return_value = 42
         mock_last.return_value = 42
         mock_lookup.return_value = None
         mock_qr.return_value = None
+        mock_pm.return_value = ["Cash", "FIB 0889", "Revolut", "Bulbank 4416"]
 
         test_client = TestClient(backend.main.app)
         test_client._mock_append = mock_append
@@ -35,6 +37,7 @@ def client():
         test_client._mock_delete = mock_delete
         test_client._mock_lookup = mock_lookup
         test_client._mock_qr = mock_qr
+        test_client._mock_pm = mock_pm
         yield test_client
 
 
@@ -59,7 +62,7 @@ class TestGetConfig:
         data = resp.json()
         assert data["version"] == VERSION
         assert data["categories"] == CATEGORIES
-        assert data["payment_methods"] == PAYMENT_METHODS
+        assert data["payment_methods"] == ["Cash", "FIB 0889", "Revolut", "Bulbank 4416"]
         assert "providers" in data
         assert set(data["providers"]) == {"claude", "gemini", "grok"}
         assert "default_provider" in data
@@ -112,6 +115,43 @@ class TestUpload:
         assert resp.status_code == 200
         assert resp.json()["data"]["category"] == "Храна"
         client._mock_lookup.assert_called_once_with("123456789")
+
+    @patch("backend.main.parse_receipt")
+    def test_upload_card_last4_matches_payment_method(self, mock_parse, client, sample_image_bytes):
+        mock_parse.return_value = ReceiptData(
+            date="15.02.2026",
+            total_eur=23.45,
+            category="Храна",
+            notes="хляб, мляко",
+            card_last4="0889",
+        )
+
+        resp = client.post(
+            "/api/upload",
+            headers=AUTH_HEADER,
+            files={"file": ("receipt.jpg", sample_image_bytes, "image/jpeg")},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["data"]["payment_method"] == "FIB 0889"
+
+    @patch("backend.main.parse_receipt")
+    def test_upload_card_last4_no_match_stays_none(self, mock_parse, client, sample_image_bytes):
+        mock_parse.return_value = ReceiptData(
+            date="15.02.2026",
+            total_eur=23.45,
+            category="Храна",
+            card_last4="9999",
+        )
+
+        resp = client.post(
+            "/api/upload",
+            headers=AUTH_HEADER,
+            files={"file": ("receipt.jpg", sample_image_bytes, "image/jpeg")},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["data"]["payment_method"] is None
 
     def test_upload_rejects_non_image(self, client):
         resp = client.post(

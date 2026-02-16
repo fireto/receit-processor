@@ -39,7 +39,7 @@ def sample_api_response():
         "date": "15.02.2026",
         "total_eur": 23.45,
         "category": "Храна",
-        "payment_method": "Revolut",
+        "card_last4": "0889",
         "notes": "хляб, мляко, сирене",
         "bulstat": "123456789",
     }

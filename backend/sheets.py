@@ -61,6 +61,16 @@ def get_last_row_number() -> int:
     return len(ws.get_all_values())
 
 
+def get_payment_methods() -> list[str]:
+    """Read payment methods from the named range ПлатежноСредство."""
+    client = _get_client()
+    sheet_id = os.environ["GOOGLE_SHEETS_ID"]
+    spreadsheet = client.open_by_key(sheet_id)
+    result = spreadsheet.values_get("ПлатежноСредство")
+    values = result.get("values", [])
+    return [cell for row in values for cell in row if cell.strip()]
+
+
 def lookup_category_by_bulstat(bulstat: str) -> str | None:
     """Find the most common category for a given БУЛСТАТ from previous entries.
 

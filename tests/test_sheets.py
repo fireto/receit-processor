@@ -9,6 +9,7 @@ from backend.sheets import (
     append_expense,
     delete_row,
     get_last_row_number,
+    get_payment_methods,
     lookup_category_by_bulstat,
     update_cell,
 )
@@ -33,6 +34,7 @@ def mock_gspread(mock_worksheet):
         mock_spreadsheet.worksheet.return_value = mock_worksheet
         mock_client.open_by_key.return_value = mock_spreadsheet
         mock_auth.return_value = mock_client
+        mock_worksheet._spreadsheet = mock_spreadsheet
         yield mock_worksheet
 
 
@@ -105,6 +107,27 @@ class TestGetLastRowNumber:
     def test_returns_row_count(self, mock_gspread):
         mock_gspread.get_all_values.return_value = [["h"] * 10, ["d"] * 10, ["d"] * 10]
         assert get_last_row_number() == 3
+
+
+class TestGetPaymentMethods:
+    def test_returns_payment_methods_from_named_range(self, mock_gspread):
+        mock_gspread._spreadsheet.values_get.return_value = {
+            "values": [["Cash"], ["FIB 0889"], ["Revolut"], ["Bulbank 4416"]]
+        }
+        result = get_payment_methods()
+        assert result == ["Cash", "FIB 0889", "Revolut", "Bulbank 4416"]
+
+    def test_filters_empty_values(self, mock_gspread):
+        mock_gspread._spreadsheet.values_get.return_value = {
+            "values": [["Cash"], [""], ["Revolut"]]
+        }
+        result = get_payment_methods()
+        assert result == ["Cash", "Revolut"]
+
+    def test_returns_empty_list_when_no_values(self, mock_gspread):
+        mock_gspread._spreadsheet.values_get.return_value = {}
+        result = get_payment_methods()
+        assert result == []
 
 
 class TestLookupCategoryByBulstat:
