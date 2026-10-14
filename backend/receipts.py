@@ -263,10 +263,8 @@ def get(conn, rid: int) -> dict | None:
 
 
 def recent(conn, limit: int = 20) -> list[sqlite3.Row]:
-    return conn.execute(
-        "SELECT r.*, (SELECT p.seq FROM receipt_photo p WHERE p.receipt_id = r.id "
-        "ORDER BY p.seq LIMIT 1) AS first_photo FROM receipt r "
-        "ORDER BY r.created_at DESC, r.id DESC LIMIT ?", (limit,)).fetchall()
+    return conn.execute("SELECT * FROM receipt ORDER BY created_at DESC, id DESC LIMIT ?",
+                        (limit,)).fetchall()
 
 
 def busy(conn) -> bool:

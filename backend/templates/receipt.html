@@ -52,7 +52,7 @@
 <section class="-mx-4 mt-5 flex snap-x gap-3 overflow-x-auto px-4 pb-2 no-scrollbar" aria-label="Снимки">
   {% for p in photos %}
   <a href="/receipts/{{ r.id }}/photos/{{ p.seq }}" target="_blank" class="shrink-0 snap-start">
-    <img src="/receipts/{{ r.id }}/photos/{{ p.seq }}" alt="Снимка {{ p.seq }}" width="{{ p.width }}" height="{{ p.height }}" loading="lazy" decoding="async" class="h-64 w-auto rounded-xl bg-white object-contain ring-1 ring-zinc-900/[0.06] dark:ring-white/[0.08]">
+    <img src="/receipts/{{ r.id }}/photos/{{ p.seq }}" alt="Снимка {{ p.seq }}" width="{{ p.width }}" height="{{ p.height }}" decoding="async" class="h-64 w-auto rounded-xl bg-white object-contain ring-1 ring-zinc-900/[0.06] dark:ring-white/[0.08]">
   </a>
   {% endfor %}
 </section>
