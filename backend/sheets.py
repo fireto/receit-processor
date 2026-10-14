@@ -51,7 +51,7 @@ def append_expense(receipt: ReceiptData) -> int:
 
 # The columns the app owns in a row it wrote; the others (Цена лв, GGBG лв, Допълн. такса,
 # Payback) are the household's and an update never touches them.
-APP_COLUMNS = ("Дата", "Категория", "Цена €", "Плащане", "Пояснения", "БУЛСТАТ")
+APP_COLUMNS = ("Дата", "Категория", "Цена €", "Плащане", "Пояснения", "БУЛСТАТ", "Обект")
 
 
 def update_expense(row: int, receipt: ReceiptData) -> None:

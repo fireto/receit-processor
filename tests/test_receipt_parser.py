@@ -132,7 +132,7 @@ class TestBgnCalculation:
 class TestSheetRow:
     def test_to_sheet_row_format(self, sample_receipt_data):
         row = sample_receipt_data.to_sheet_row()
-        assert len(row) == 10
+        assert len(row) == 11
         assert row[0] == "15.02.2026"  # date
         assert row[1] == "Храна"  # category
         assert row[2] == ""  # Цена лв left empty for new rows (DESIGN.md)
@@ -143,6 +143,7 @@ class TestSheetRow:
         assert row[7] == ""  # payback
         assert row[8] == "хляб, мляко, сирене"  # notes
         assert row[9] == ""  # bulstat (not set in fixture)
+        assert row[10] == ""  # venue (not set in fixture)
 
     def test_to_sheet_row_no_payment(self):
         receipt = ReceiptData(

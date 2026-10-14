@@ -82,6 +82,12 @@ class TestAppendExpense:
         row = mock_gspread.append_row.call_args[0][0]
         assert row[3] == "23,45"  # Цена €, comma as decimal separator
 
+    def test_venue_in_column_k(self, mock_gspread, sample_receipt_data):
+        sample_receipt_data.venue = "Лидл Варна 0204"
+        append_expense(sample_receipt_data)
+        row = mock_gspread.append_row.call_args[0][0]
+        assert SHEET_COLUMNS[10] == "Обект" and row[10] == "Лидл Варна 0204"
+
     def test_bgn_column_left_empty(self, mock_gspread, sample_receipt_data):
         append_expense(sample_receipt_data)
         row = mock_gspread.append_row.call_args[0][0]
@@ -127,7 +133,7 @@ class TestUpdateExpense:
             {"range": "A7:B7", "values": [["15.02.2026", "Храна"]]},
             {"range": "D7", "values": [["23,45"]]},
             {"range": "F7", "values": [["Revolut"]]},
-            {"range": "I7:J7", "values": [["хляб, мляко, сирене", "131129282"]]},
+            {"range": "I7:K7", "values": [["хляб, мляко, сирене", "131129282", ""]]},
         ]
         assert mock_gspread.batch_update.call_args[1]["value_input_option"] == "USER_ENTERED"
 

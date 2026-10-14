@@ -33,6 +33,7 @@ SHEET_COLUMNS = [
     "Payback",
     "Пояснения",
     "БУЛСТАТ",
+    "Обект",  # the venue as printed on the receipt (one store of a chain)
 ]
 
 
@@ -45,6 +46,7 @@ class ReceiptData:
     notes: str = ""
     bulstat: Optional[str] = None
     card_last4: Optional[str] = None  # not stored in sheet, used for matching
+    venue: Optional[str] = None
 
     @property
     def total_bgn(self) -> float:
@@ -63,4 +65,5 @@ class ReceiptData:
             "",  # Payback
             self.notes,
             self.bulstat or "",
+            self.venue or "",
         ]

@@ -448,7 +448,7 @@ def sheet_data(r: sqlite3.Row) -> ReceiptData:
     return ReceiptData(date=day.strftime("%d.%m.%Y"), total_eur=(r["total_cents"] or 0) / 100,
                        category=r["category"] or DEFAULT_CATEGORY,
                        payment_method=r["payment_method"], notes=r["notes"] or "",
-                       bulstat=r["eik"])
+                       bulstat=r["eik"], venue=r["store_name"])
 
 
 def sync_sheet(conn, sheet, rid: int, now: datetime | None = None) -> bool:

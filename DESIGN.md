@@ -144,13 +144,13 @@ count. "< 30 s" is judged on the median. `--dry-run` prints the plan and an uppe
 ## Google Sheet
 
 Columns unchanged: Дата, Категория, Цена лв, Цена €, GGBG лв, Плащане, Допълн. такса,
-Payback, Пояснения, БУЛСТАТ. **Цена лв gets the household's own conversion formula**
+Payback, Пояснения, БУЛСТАТ, Обект (K: the venue as printed, added 2026-10-14). **Цена лв gets the household's own conversion formula**
 `=IF(NOT(ISFORMULA(D<row>));D<row>*1,95583;"")` (bg_BG syntax), written right after the
 append: the reports (Годишен Отчет, Отчет2023) sum Цена лв only, so a row without it would
 be missing from them. The user may hide the column. Categories and payment methods come from
 the named ranges Категории / ПлатежноСредство. A row is written when a receipt becomes `ok`
 or is confirmed; later edits update the row; deleting the receipt deletes its row.
-The app writes only Дата, Категория, Цена €, Плащане, Пояснения, БУЛСТАТ; the hand-filled
+The app writes only Дата, Категория, Цена €, Плащане, Пояснения, БУЛСТАТ, Обект; the hand-filled
 columns are never touched. An `ok` receipt with `sheet_written_at` NULL has a pending
 write, retried by the reader thread every minute. Deleting a row shifts the stored
 `sheet_row`s below it; a row whose Дата/Цена € no longer match the receipt is not deleted

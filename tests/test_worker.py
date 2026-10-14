@@ -91,7 +91,7 @@ def test_ok_reading_stores_everything_and_writes_the_sheet_row(env):
     # the Sheet: the next row, euro only, ЕИК in БУЛСТАТ
     assert r["sheet_row"] == 2 and r["sheet_written_at"]
     assert sheet.rows[1] == ["14.10.2026", "Храна", "", "12,34", "", "FIB 0889", "", "",
-                             "хляб, мляко, сирене", "131129282"]
+                             "хляб, мляко, сирене", "131129282", "Kaufland България"]
 
 
 @pytest.mark.parametrize("status", ["check", "retake", "failed"])
