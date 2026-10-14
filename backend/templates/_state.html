@@ -1,0 +1,5 @@
+{% from "_macros.html" import status_chip %}
+<div id="state" class="notice flex items-center gap-3" hx-get="/receipts/{{ receipt.id }}/state" hx-trigger="every 2s" hx-swap="outerHTML" role="status">
+  <span class="size-2 animate-pulse rounded-full bg-emerald-500" aria-hidden="true"></span>
+  <span>{{ STATUS_LABELS[receipt.status] }} {% if receipt.status == 'queued' %}<span class="muted">(на опашка)</span>{% endif %}</span>
+</div>

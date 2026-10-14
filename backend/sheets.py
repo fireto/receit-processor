@@ -40,6 +40,33 @@ def append_expense(receipt: ReceiptData) -> int:
     return len(ws.get_all_values())
 
 
+# The columns the app owns in a row it wrote; the others (Цена лв, GGBG лв, Допълн. такса,
+# Payback) are the household's and an update never touches them.
+APP_COLUMNS = ("Дата", "Категория", "Цена €", "Плащане", "Пояснения", "БУЛСТАТ")
+
+
+def update_expense(row: int, receipt: ReceiptData) -> None:
+    """Rewrite the app-owned columns of an existing row (one API call)."""
+    values = dict(zip(SHEET_COLUMNS, receipt.to_sheet_row()))
+    updates, run = [], []
+    for idx, name in enumerate(SHEET_COLUMNS + [None]):
+        if name in APP_COLUMNS:
+            run.append(idx)
+            continue
+        if run:
+            first = gspread.utils.rowcol_to_a1(row, run[0] + 1)
+            last = gspread.utils.rowcol_to_a1(row, run[-1] + 1)
+            updates.append({"range": first if first == last else f"{first}:{last}",
+                            "values": [[values[SHEET_COLUMNS[i]] for i in run]]})
+            run = []
+    _get_worksheet().batch_update(updates, value_input_option="USER_ENTERED")
+
+
+def get_row(row: int) -> dict[str, str]:
+    """The row's values by column name (trailing empty cells are absent)."""
+    return dict(zip(SHEET_COLUMNS, _get_worksheet().row_values(row)))
+
+
 def update_cell(row: int, column_name: str, value: str) -> None:
     """Update a single cell in the given row by column name."""
     if column_name not in SHEET_COLUMNS:
