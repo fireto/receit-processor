@@ -13,8 +13,17 @@ Deferred and upcoming work. Delete an entry when it lands.
   the household's Цена лв formula, because the reports sum that column only.
 - First real-Sheet row checked by the user on 2026-10-14: row 1629, C formula 6,85 лв for
   €3,50. Duplicate detection caught a real re-scan (Haiku, by header).
-- Duplicate detection live (schema v2). `data/backup/pre-migration-2.db` on the host can
-  be deleted once v2 has run for a while — ask the user first.
+- Live since 2026-10-14, schema v3:
+  - duplicate detection
+  - ЕИК check digit (a misread ЕИК → `check`) with the VIES company cache (`company`)
+  - "Всички бележки" (/receipts) with status filters
+  - Sheet column K "Обект" = venue name (backfilled on all 36 written rows)
+  - Venue name kept as read; the registered company is shown under it
+  - `CARD_METHODS` exists, but the host `.env` has none set: the user puts card digits in
+    ПлатежноСредство names instead ("Ваучери за храна 6832").
+  `data/backup/pre-migration-{2,3}.db` on the host can go once v3 has run for a while — ask
+  the user first.
+- 37 receipts scanned so far (all in the real Sheet except #1, which is detached).
 - Push from the `rebuild` worktree (`../receit-processor-wt-int`):
   `git push git@github.com:fireto/receit-processor.git rebuild:main`. Local `main` holds
   the user's WIP and is behind; the user updates it with `git stash; git pull; git stash pop`.
@@ -22,8 +31,14 @@ Deferred and upcoming work. Delete an entry when it lands.
   theirs to finish or drop — leave it alone.
 
 ## Waiting for the user
-- 15–20 receipt photos in `tests/sample_receipts/` (see DESIGN.md "Model comparison"), and
-  the paper originals of a few to check the expected values.
+- Misread ЕИКs already in the Sheet: #22 Lidl 131071687 → 131071587 (offered to fix it),
+  and #37 МАКСИМУМ 66 ООД 131038077 (check the paper). Correct them on the receipt page,
+  and the Sheet row follows.
+- Correct the comparison drafts (`tests/sample_receipts/rNN.expected.json` in this
+  worktree; 37 receipts, drafted from the app's own readings, so Haiku-biased) against the
+  paper. Start with r10, r13, r20, r24, r37 (dates), r22, r37 (ЕИК), r35, r36, r39
+  (self-check). Then rescore for free:
+  `python -m backend.eval --samples tests/sample_receipts --rescore eval-out/20261014-153055`.
 - An OpenAI API key (cap $2) for the comparison; $2 caps in the Anthropic, Google and xAI
   consoles. Anthropic credit was added 2026-10-14 and Haiku answers (4 s, $0.0007 a
   receipt).
@@ -56,6 +71,21 @@ Deferred and upcoming work. Delete an entry when it lands.
   (API key), Apify "bulgarian-company-check" (~$2 / 1000 lookups). The Registry Agency
   portal has no public API. `companies.search()` (name → ЕИК among cached companies) has
   no UI yet; manual entry could use it.
+
+## Model comparison — first run 2026-10-14 (stopped, partial)
+- Ran on the server inside the app container (`/app/data/eval/`, samples + run
+  20261014-153055). It pushed the container to 309/384 MB, so the next run goes in a
+  separate container (`docker run --rm` with the image, `.env` and `data/eval` mounted). A
+  local copy of the run is in `eval-out/` (git-ignored).
+- Against the unchecked drafts:
+  - Haiku: header 89 %, lines 91 %, self-check 83 %, 5.5 s, $0.0012 a receipt.
+  - Sonnet: 83 % / 95 % / 89 %, 3.0 s, $0.015 a receipt.
+  - Gemini 3.8 Flash: unusable (timeouts at 120 s, 503 "high demand").
+  - Not run yet: gemini-3.8-flash@low and gemini-3.5-flash-lite (prices
+    `READING_PRICES="gemini-3.8-flash=0.75/3.75,gemini-3.5-flash-lite=0.54/4.50"`).
+- xAI has no credits, so Grok is out. OpenAI has no key yet.
+- The default backup `gemini:gemini-3.8-flash` is therefore not reliable. Choose a backup
+  after the next run.
 
 ## Next
 - Model comparison → choose the ladder and the backup provider (cheapest reliable model
