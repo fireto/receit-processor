@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend import config, db, health, receipts, sheet_sync, ui, worker
+from backend import companies, config, db, health, receipts, sheet_sync, ui, worker
 
 load_dotenv()
 
@@ -25,7 +25,8 @@ def make_worker(sheet) -> worker.Worker | None:
         log.warning("RECEIPTS_READER=fake: canned readings, no model calls")
         return worker.Worker(config.DB_PATH, config.PHOTOS_DIR, sheet, read=fakes.dev_read,
                              decode_qr=fakes.dev_decode_qr)
-    return worker.Worker(config.DB_PATH, config.PHOTOS_DIR, sheet)
+    return worker.Worker(config.DB_PATH, config.PHOTOS_DIR, sheet,
+                         company_lookup=companies.vies_fetch)
 
 
 @asynccontextmanager
@@ -38,6 +39,8 @@ async def lifespan(app: FastAPI):
     conn.close()
     app.state.sheet = sheet_sync.make_sheet()
     app.state.worker = make_worker(app.state.sheet)
+    # ЕИК → company over the network only with the real reader (not in tests / dev)
+    app.state.company_lookup = companies.vies_fetch if worker.mode() == "1" else None
     if app.state.worker:
         app.state.worker.start()
     yield

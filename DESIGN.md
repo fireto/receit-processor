@@ -72,6 +72,13 @@ first, then in code.
 - QR decoding, card-digits → payment method and ЕИК → category from history are kept from
   the PoC. Cards whose digits are not in their method's name (food vouchers) are mapped
   by `CARD_METHODS` in the host `.env`.
+- **ЕИК**: a wrong check digit (9-digit ЕИК, 13-digit branch code) means a misread, so an
+  `ok` receipt becomes `check` with the ЕИК highlighted (it is editable on the receipt
+  page). A valid ЕИК is looked up once in **VIES** (EU VAT check, free, no key), and the
+  answer is cached in the `company` table. The registered name then replaces the name as
+  read. VIES only knows VAT-registered companies: "not found" is cached and asked again
+  after 30 days, and a failed request is not cached. Търговски регистър has no public API
+  (paid ones: docs/TODO.md).
 - **Settled in code** (2026-10-14): amounts are integer cents in the schema itself;
   `payment` is `cash`/`card`/`unknown` (→ None); `category` is an enum of the passed
   categories (fallback Разни); line discounts are stored positive, receipt discounts are
@@ -120,6 +127,7 @@ count. "< 30 s" is judged on the median. `--dry-run` prints the plan and an uppe
 - `receipt_line`: receipt_id, seq, name, qty, unit, unit_price_cents, total_cents,
   discount_cents, vat_group.
 - `receipt_discount`: receipt_id, seq, name, cents.
+- `company`: eik, name, address, source (`vies`), found, checked_at — the ЕИК cache.
 - `reading`: every model call — receipt_id, provider, model, started_at, seconds,
   input/output tokens, cost estimate, outcome, raw structured output (kept so a receipt can
   be re-derived without paying again).

@@ -41,10 +41,12 @@ def mode() -> str:
 class Worker:
     def __init__(self, db_path: Path | str, photos_dir: Path, sheet,
                  read: Callable = read_receipt, decode_qr: Callable = decode_qr,
-                 clock: Callable[[], datetime] = receipts.utcnow, idle_wait: float = 2.0):
+                 clock: Callable[[], datetime] = receipts.utcnow, idle_wait: float = 2.0,
+                 company_lookup: Callable | None = None):
         self.db_path, self.photos_dir, self.sheet = db_path, Path(photos_dir), sheet
         self.read, self.decode_qr, self.clock = read, decode_qr, clock
         self.idle_wait = idle_wait
+        self.company_lookup = company_lookup
         self._stop = threading.Event()
         self._wake = threading.Event()
         self.thread: threading.Thread | None = None
@@ -96,6 +98,7 @@ class Worker:
         status = receipts.store_outcome(conn, rid, outcome, qr)
         if getattr(outcome, "reading", None) is not None:
             receipts.apply_history(conn, self.sheet, rid)
+            status = receipts.apply_company(conn, rid, self.company_lookup, status, self.clock())
         if status in ("ok", "check") and not receipts.get_row(conn, rid)["sheet_row"]:
             original = receipts.find_duplicate(conn, rid)
             if original:

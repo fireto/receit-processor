@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from backend import config, db, fmt, photos, receipts, sheet_sync
+from backend import companies, config, db, fmt, photos, receipts, sheet_sync
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +52,8 @@ def static_url(path: str) -> str:
 
 templates = Jinja2Templates(directory=BASE / "templates")
 templates.env.globals.update(static=static_url, STATUS_LABELS=STATUS_LABELS,
-                             QUALITY_LABELS=QUALITY_LABELS, MAX_PHOTOS=receipts.MAX_PHOTOS)
+                             QUALITY_LABELS=QUALITY_LABELS, MAX_PHOTOS=receipts.MAX_PHOTOS,
+                             eik_valid=companies.eik_valid)
 templates.env.filters.update(eur=fmt.eur, amount=fmt.amount, bgdate=fmt.bgdate,
                              local=fmt.local, qty=fmt.qty)
 
@@ -210,7 +211,7 @@ def _parse_header(date_: str, total: str) -> tuple[str | None, int | None, str |
 def edit_receipt(request: Request, rid: int, date_: str = Form("", alias="date"),
                  total: str = Form(""), category: str = Form(""),
                  payment_method: str = Form(""), notes: str = Form(""),
-                 conn: sqlite3.Connection = Conn):
+                 eik: str | None = Form(None), conn: sqlite3.Connection = Conn):
     found = _receipt(conn, rid)
     day, cents, error = _parse_header(date_, total)
     if error:
@@ -221,7 +222,10 @@ def edit_receipt(request: Request, rid: int, date_: str = Form("", alias="date")
     in_sync = receipts.update_header(conn, get_sheet(request), rid, date=day, total_cents=cents,
                                      category=category.strip(),
                                      payment_method=payment_method.strip(),
-                                     notes=notes.strip())
+                                     notes=notes.strip(),
+                                     **({} if eik is None else {"eik": eik}),
+                                     company_lookup=getattr(request.app.state,
+                                                            "company_lookup", None))
     pending = found["receipt"]["status"] == "ok" and not in_sync
     return see_other(f"/receipts/{rid}?saved={'pending' if pending else '1'}")
 

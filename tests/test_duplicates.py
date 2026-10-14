@@ -61,7 +61,7 @@ def test_same_qr_is_caught_before_reading(env):
 
 
 @pytest.mark.parametrize("change", [{"total_cents": 1235}, {"time": "18:43"},
-                                    {"date": "2026-10-15"}, {"eik": "999999999"}])
+                                    {"date": "2026-10-15"}, {"eik": "131071587"}])
 def test_a_different_receipt_is_not_a_duplicate(env, change):
     conn, sheet, _, run = env
     run()

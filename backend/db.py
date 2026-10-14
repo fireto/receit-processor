@@ -151,6 +151,17 @@ MIGRATIONS = [
     CREATE INDEX receipt_created ON receipt (created_at);
     CREATE INDEX receipt_duplicate_key ON receipt (eik, date, total_cents);
     """,
+    # 3 — ЕИК → registered company (VIES), cached; found = 0: not registered for VAT
+    """
+    CREATE TABLE company (
+        eik         TEXT PRIMARY KEY,
+        name        TEXT,
+        address     TEXT,
+        source      TEXT NOT NULL,
+        found       INTEGER NOT NULL,
+        checked_at  TEXT NOT NULL
+    );
+    """,
 ]
 
 

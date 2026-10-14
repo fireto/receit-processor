@@ -50,6 +50,13 @@ Deferred and upcoming work. Delete an entry when it lands.
   it with "", because Плащане is an app column. Either keep a hand-set Плащане when the
   app's value is empty, or get the user to set it in the app.
 
+- ЕИК → company (2026-10-14) uses VIES only. A company VIES does not know (not
+  VAT-registered) keeps the name as read. Fallbacks with an API, all paid or scraped:
+  apis.bg "Регистър API" (12-month subscription, search by ЕИК/name), TheCompanyBook API
+  (API key), Apify "bulgarian-company-check" (~$2 / 1000 lookups). The Registry Agency
+  portal has no public API. `companies.search()` (name → ЕИК among cached companies) has
+  no UI yet; manual entry could use it.
+
 ## Next
 - Model comparison → choose the ladder and the backup provider (cheapest reliable model
   first); record the result in DESIGN.md.

@@ -20,6 +20,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from backend import companies
 from backend import photos as photo_store
 from backend.config import DEFAULT_CATEGORY, SHEET_COLUMNS, ReceiptData
 
@@ -301,6 +302,29 @@ def dismiss_duplicate(conn, sheet, rid: int, now: datetime | None = None) -> str
     return held or "queued"
 
 
+# --- the company ------------------------------------------------------------------------
+
+def apply_company(conn, rid: int, fetch, status: str, now: datetime | None = None) -> str:
+    """A misread ЕИК (wrong check digit) holds an `ok` receipt as `check`; a known company's
+    registered name replaces the name as read. Returns the status."""
+    r = get_row(conn, rid)
+    eik = r["eik"]
+    if not eik:
+        return status
+    if not companies.eik_valid(eik):
+        if status == "ok":
+            with conn:
+                conn.execute("UPDATE receipt SET status = 'check' WHERE id = ?", (rid,))
+            log.info("receipt %s: ЕИК %s fails its check digit", rid, eik)
+            return "check"
+        return status
+    company = companies.lookup(conn, eik, fetch=fetch, now=now)
+    if company and company.name != r["store_name"]:
+        with conn:
+            conn.execute("UPDATE receipt SET store_name = ? WHERE id = ?", (company.name, rid))
+    return status
+
+
 # --- spend -----------------------------------------------------------------------------
 
 def spent_this_month_usd(conn, now: datetime | None = None) -> float:
@@ -353,11 +377,26 @@ def pending_sheet_ids(conn) -> list[int]:
 
 # --- edits -------------------------------------------------------------------------------
 
+_UNCHANGED = object()
+
+
 def update_header(conn, sheet, rid: int, *, date: str | None, total_cents: int | None,
                   category: str | None, payment_method: str | None, notes: str | None,
+                  eik=_UNCHANGED, company_lookup=None,
                   now: datetime | None = None) -> bool:
     """Save the editable fields; a written receipt's row is updated. Returns whether the
-    Sheet is in sync (False: the update is pending and will be retried)."""
+    Sheet is in sync (False: the update is pending and will be retried). A changed ЕИК is
+    looked up and its registered name replaces the store name."""
+    if eik is not _UNCHANGED:
+        eik = "".join(ch for ch in (eik or "") if ch.isdigit()) or None
+        if eik != get_row(conn, rid)["eik"]:
+            with conn:
+                conn.execute("UPDATE receipt SET eik = ? WHERE id = ?", (eik, rid))
+            company = companies.lookup(conn, eik, fetch=company_lookup, now=now)
+            if company:
+                with conn:
+                    conn.execute("UPDATE receipt SET store_name = ? WHERE id = ?",
+                                 (company.name, rid))
     with conn:
         conn.execute(
             "UPDATE receipt SET date = ?, total_cents = ?, category = ?, payment_method = ?, "

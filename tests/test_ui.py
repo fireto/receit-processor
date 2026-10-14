@@ -400,3 +400,22 @@ def test_duplicate_page_links_the_original_and_can_be_dismissed(client, conn, sh
     assert resp.status_code == 303 and resp.headers["location"] == f"/receipts/{second}"
     assert conn.execute("SELECT status, sheet_row FROM receipt WHERE id = ?",
                         (second,)).fetchone()[:] == ("ok", 3)
+
+
+def test_misread_eik_is_explained_and_can_be_corrected(client, conn, sheet):
+    upload(client)
+    worker(sheet, FakeReader(Outcome(reading=Reading(eik="131071687")))).process_next()
+    rid = conn.execute("SELECT id FROM receipt").fetchone()[0]
+    assert conn.execute("SELECT status FROM receipt").fetchone()[0] == "check"
+
+    html = body(client.get(f"/receipts/{rid}"))
+    assert "ЕИК 131071687 изглежда прочетен грешно" in html
+    assert 'name="eik" value="131071687"' in html
+
+    r = conn.execute("SELECT * FROM receipt").fetchone()
+    resp = client.post(f"/receipts/{rid}", data={
+        "date": r["date"], "total": "12,34", "category": "Храна", "payment_method": "",
+        "notes": "", "eik": "BG 131071587"})
+    assert resp.status_code == 303
+    assert conn.execute("SELECT eik FROM receipt").fetchone()[0] == "131071587"
+    assert "изглежда прочетен грешно" not in body(client.get(f"/receipts/{rid}"))
