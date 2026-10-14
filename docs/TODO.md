@@ -20,8 +20,6 @@ Deferred and upcoming work. Delete an entry when it lands.
 - Hide the "Цена лв" column in the Sheet (keep its history).
 
 ## App rebuild (branch rebuild-app) — open points
-- `tests/test_receipt_parser.py::TestSheetRow` still expects a BGN value in "Цена лв"; the
-  design leaves it empty. Fix it with the reading work that owns that file.
 - The camera island (several photos, "＋ още снимка") is only rendered in headless
   Firefox; try it on a phone (Android + iOS) before going live.
 - Sheet rows are addressed by number: rows inserted/deleted by hand above a receipt's row

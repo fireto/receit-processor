@@ -128,8 +128,10 @@ count. "< 30 s" is judged on the median. `--dry-run` prints the plan and an uppe
 ## Google Sheet
 
 Columns unchanged: Дата, Категория, Цена лв, Цена €, GGBG лв, Плащане, Допълн. такса,
-Payback, Пояснения, БУЛСТАТ. **Цена лв is left empty for new rows** (the column keeps its
-history; the user hides it in the Sheet by hand). Categories and payment methods come from
+Payback, Пояснения, БУЛСТАТ. **Цена лв gets the household's own conversion formula**
+`=IF(NOT(ISFORMULA(D<row>));D<row>*1,95583;"")` (bg_BG syntax), written right after the
+append: the reports (Годишен Отчет, Отчет2023) sum Цена лв only, so a row without it would
+be missing from them. The user may hide the column. Categories and payment methods come from
 the named ranges Категории / ПлатежноСредство. A row is written when a receipt becomes `ok`
 or is confirmed; later edits update the row; deleting the receipt deletes its row.
 The app writes only Дата, Категория, Цена €, Плащане, Пояснения, БУЛСТАТ; the hand-filled

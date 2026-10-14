@@ -1,6 +1,7 @@
 """Google Sheets integration: append, update, and delete expense rows."""
 
 import os
+import re
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -31,13 +32,21 @@ def _get_worksheet() -> gspread.Worksheet:
     return spreadsheet.worksheet(worksheet_name)
 
 
+# The household's own rows fill Цена лв with this conversion (the reports sum Цена лв
+# only). bg_BG formula syntax: `;` separators, decimal comma.
+BGN_FORMULA = '=IF(NOT(ISFORMULA(D{row}));D{row}*1,95583;"")'
+
+
 def append_expense(receipt: ReceiptData) -> int:
     """Append an expense row to the sheet. Returns the row number."""
     ws = _get_worksheet()
-    row = receipt.to_sheet_row()
-    ws.append_row(row, value_input_option="USER_ENTERED")
-    # Get the actual last row with data (not ws.row_count which includes empty rows)
-    return len(ws.get_all_values())
+    response = ws.append_row(receipt.to_sheet_row(), value_input_option="USER_ENTERED")
+    # "'Разходи'!A1629:J1629" → 1629
+    updated = response["updates"]["updatedRange"]
+    row = int(re.search(r"!\$?[A-Z]+\$?(\d+)", updated).group(1))
+    ws.update(range_name=f"C{row}", values=[[BGN_FORMULA.format(row=row)]],
+              value_input_option="USER_ENTERED")
+    return row
 
 
 # The columns the app owns in a row it wrote; the others (Цена лв, GGBG лв, Допълн. такса,

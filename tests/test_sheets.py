@@ -61,10 +61,11 @@ class TestAppendExpense:
         assert call_kwargs["value_input_option"] == "USER_ENTERED"
 
     def test_returns_row_number(self, mock_gspread, sample_receipt_data):
-        # get_all_values returns header + 1 data row = 2 rows, then append adds 1 → 3
-        mock_gspread.get_all_values.return_value = [["h"] * 10, ["d"] * 10, ["new"] * 10]
+        # the row the append API reports, not a count of the rows that have values
+        mock_gspread.append_row.return_value = {
+            "updates": {"updatedRange": "'Разходи'!A1629:J1629"}}
         row_num = append_expense(sample_receipt_data)
-        assert row_num == 3
+        assert row_num == 1629
 
     def test_row_has_correct_column_count(self, mock_gspread, sample_receipt_data):
         append_expense(sample_receipt_data)
@@ -85,6 +86,18 @@ class TestAppendExpense:
         append_expense(sample_receipt_data)
         row = mock_gspread.append_row.call_args[0][0]
         assert row[2] == ""  # Цена лв: history only, not written for new rows
+
+    def test_bgn_column_gets_the_households_conversion_formula(
+            self, mock_gspread, sample_receipt_data):
+        # The reports (Годишен Отчет) sum Цена лв only; the household's own rows fill it
+        # with this formula (bg_BG syntax: `;` separators, decimal comma).
+        mock_gspread.append_row.return_value = {
+            "updates": {"updatedRange": "'Разходи'!A1629:J1629"}}
+        append_expense(sample_receipt_data)
+        mock_gspread.update.assert_called_once_with(
+            range_name="C1629",
+            values=[['=IF(NOT(ISFORMULA(D1629));D1629*1,95583;"")']],
+            value_input_option="USER_ENTERED")
 
 
 class TestUpdateCell:

@@ -73,7 +73,8 @@ def sample_image_bytes():
 def mock_worksheet():
     """A mocked gspread Worksheet."""
     ws = MagicMock()
-    ws.append_row = MagicMock()
+    ws.append_row = MagicMock(
+        return_value={"updates": {"updatedRange": "'Разходи'!A3:J3"}})
     ws.update_cell = MagicMock()
     ws.delete_rows = MagicMock()
     ws.get_all_values = MagicMock(return_value=[["header"] * 10, ["data"] * 10])
