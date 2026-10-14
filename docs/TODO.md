@@ -6,8 +6,9 @@ Deferred and upcoming work. Delete an entry when it lands.
 - Rebuild from the February PoC under way (DESIGN.md, decided 2026-10-14): offers stack,
   SQLite + photo store, background reading with structured output, self-check and quality
   flags, lab-managed deployment.
-- The PoC still runs at https://rec.fireto.net from `/opt/appdata/receit-processor`
-  (unmanaged route, PIN auth); it has never been used for real.
+- Deployed 2026-10-14 at https://rec.fireto.net from `/opt/lab/receit-processor`
+  (lab-managed route: basic auth outside, LAN bypass; Gatus; restic). Not yet used for
+  real; the old PoC deploy is gone.
 - The user's uncommitted edit of `tests/test_receipt_parser.py` (pyzbar warning test) is
   theirs to finish or drop — leave it alone.
 
@@ -38,7 +39,8 @@ Deferred and upcoming work. Delete an entry when it lands.
   offers endpoint with a queue and retries; re-send after an edit or re-read. offers ignores
   ЕИКs that are not its chains. Designed together with the offers side (review screen,
   matching, purchases, price corrections) in its own grilling round.
-- Move the deployment to `/opt/lab/receit-processor`; restore-test the receipts backup.
+- Restore drill with real data (photos) once receipts exist — tracked in the lab's
+  docs/TODO.md.
 
 ## Reading module (added 2026-10-14, branch `reading`)
 - First real comparison run (`python -m backend.eval --dry-run`, then `--yes` with the
