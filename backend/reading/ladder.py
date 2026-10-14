@@ -3,7 +3,8 @@ self-check.
 
 Configuration (environment):
 - READING_LADDER  comma-separated `provider:model[@effort]`, tried in order
-- READING_BACKUP  one `provider:model[@effort]` tried once when a rung errors ("" = none)
+- READING_BACKUP  one `provider:model[@effort]` tried once when a rung errors
+                  (unset = DEFAULT_BACKUP, "" = none)
 - MONTHLY_CAP_USD no paid call once this month's estimate reaches it (default 2)
 """
 
@@ -26,6 +27,7 @@ from backend.reading.schema import ReadingError, build_schema, to_reading
 logger = logging.getLogger(__name__)
 
 DEFAULT_LADDER = "claude:claude-haiku-5-5,claude:claude-sonnet-5-5"
+DEFAULT_BACKUP = "gemini:gemini-3.8-flash"
 DEFAULT_CAP_USD = 2.0
 
 
@@ -35,7 +37,7 @@ def ladder_config() -> list[ModelSpec]:
 
 
 def backup_config() -> ModelSpec | None:
-    text = os.environ.get("READING_BACKUP", "").strip()
+    text = os.environ.get("READING_BACKUP", DEFAULT_BACKUP).strip()
     return ModelSpec.parse(text) if text else None
 
 

@@ -221,3 +221,18 @@ def test_public_interface():
     for name in ["read_receipt", "decode_qr", "check", "ReadOutcome", "Reading", "Line",
                  "Discount", "Attempt", "SelfCheck"]:
         assert hasattr(reading_pkg, name), name
+
+
+def test_backup_defaults_to_gemini_when_unset(monkeypatch):
+    # DESIGN.md "Ladder": until the comparison decides, the backup is Gemini — an
+    # Anthropic outage (e.g. no credit) must not fail every receipt.
+    from backend.reading.ladder import backup_config
+    monkeypatch.delenv("READING_BACKUP", raising=False)
+    spec = backup_config()
+    assert spec is not None and spec.provider == "gemini"
+
+
+def test_empty_backup_means_none(monkeypatch):
+    from backend.reading.ladder import backup_config
+    monkeypatch.setenv("READING_BACKUP", "")
+    assert backup_config() is None
