@@ -28,7 +28,6 @@ Deferred and upcoming work. Delete an entry when it lands.
 - An OpenAI API key (cap $2) for the comparison; $2 caps in the Anthropic, Google and xAI
   consoles. Anthropic had no credit on 2026-10-14; Sonnet then worked, so credit was
   apparently added. Confirm from the log that Haiku answers too.
-- Which phone (iPhone → HEIC support, `pillow-heif`).
 - Optional: hide the "Цена лв" column (it now gets a formula; keep it).
 
 ## App rebuild (branch rebuild-app) — open points
@@ -65,4 +64,8 @@ Deferred and upcoming work. Delete an entry when it lands.
 - Gemini backup (`gemini-3.8-flash`, default since 2026-10-14): took 70 s on one receipt
   and timed out at 120 s on the other, which is far over the 30 s target. Its price is not
   in `READING_PRICES`, so its calls count $0 toward the cap. Settle both in the comparison.
-- HEIC samples need `pillow-heif` (not a dependency); convert them or add it if needed.
+- Phones are all Android (S24 Ultra, Pixel 4a, Nokia; answered 2026-10-14), so no HEIC
+  support is planned. The S24's camera can save HEIF ("High efficiency pictures", off by
+  default). If such a photo is uploaded from the gallery, the app answers "Файлът не е
+  снимка"; add `pillow-heif` only if that ever happens. HEIC samples for the comparison
+  need converting.
