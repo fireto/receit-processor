@@ -94,6 +94,10 @@ the backup. The report (per model: accuracy, seconds, tokens, cost) goes to `eva
 - `reading`: every model call — receipt_id, provider, model, started_at, seconds,
   input/output tokens, cost estimate, outcome, raw structured output (kept so a receipt can
   be re-derived without paying again).
+- Queue columns on `receipt`: `queued_at` (the >10 min health check), `start_at` (ladder
+  index the next reading starts at), `next_start_at` (what *Прочети отново* uses; NULL = no
+  better model). A manual entry is a `receipt` with source `manual`, no photos, status `ok`.
+- `reading.receipt_id` is set NULL when a receipt is deleted: the rows are the month's spend.
 - Migrations: append-only, `PRAGMA user_version`, run at startup (as in offers).
 - **Photos**: `data/photos/<receipt id>/<seq>.webp`, EXIF orientation applied, long side
   ≤ 2000 px, WebP q80 (~300 KB). Kept for good (re-reading with a better prompt/model).
@@ -106,6 +110,11 @@ Payback, Пояснения, БУЛСТАТ. **Цена лв is left empty for n
 history; the user hides it in the Sheet by hand). Categories and payment methods come from
 the named ranges Категории / ПлатежноСредство. A row is written when a receipt becomes `ok`
 or is confirmed; later edits update the row; deleting the receipt deletes its row.
+The app writes only Дата, Категория, Цена €, Плащане, Пояснения, БУЛСТАТ; the hand-filled
+columns are never touched. An `ok` receipt with `sheet_written_at` NULL has a pending
+write, retried by the reader thread every minute. Deleting a row shifts the stored
+`sheet_row`s below it; a row whose Дата/Цена € no longer match the receipt is not deleted
+(the user is told to check it). All Sheet writes are serialised in-process.
 
 ## UI
 
@@ -125,6 +134,8 @@ Python 3.13, FastAPI, Jinja2, SQLite, Pillow, pyzbar, gspread, the providers' of
   (moved from `/opt/appdata/…` so restic covers it), `rebuild.sh`, host port **8000** (lab
   SPEC.md registry), route-only project `projects/receit-processor/` in the lab repo
   (`Host(rec.fireto.net)`, letsencrypt, basic auth outside / LAN bypass).
+- Local runs without models or the Sheet: `RECEIPTS_READER=fake` (canned reading; `0` = no
+  reader thread, as in the tests), `RECEIPTS_SHEET=fake` (in-memory), `RECEIPTS_DATA`.
 - `/healthz` (Gatus): 503 when the reader thread is dead, a receipt has been queued for
   > 10 min, or the database is not writable. `/livez` always 200 (container healthcheck).
 - Backups: the lab's restic takes `data/` (photos as files; the database through the backup
