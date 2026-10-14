@@ -66,6 +66,20 @@ first, then in code.
   The provider consoles carry the same hard cap ($2 per provider).
 - QR decoding, card-digits → payment method and ЕИК → category from history are kept from
   the PoC.
+- **Settled in code** (2026-10-14): amounts are integer cents in the schema itself;
+  `payment` is `cash`/`card`/`unknown` (→ None); `category` is an enum of the passed
+  categories (fallback Разни); line discounts are stored positive, receipt discounts are
+  signed (positive reduces the total). Prompt: one stable English block (cacheable), the
+  category list in a second block. Config: `READING_LADDER` / `READING_BACKUP` as
+  `provider:model[@effort]` (effort = Claude `output_config.effort`, Gemini
+  `thinking_level`, OpenAI/xAI `reasoning.effort`; omitted = model default),
+  `READING_PRICES` `model=in/out` USD per 1M (Claude 5.5 prices built in; unknown → $0 + a
+  warning). APIs: Claude Messages `output_config.format`; Gemini Interactions API
+  `response_format` (generateContent is legacy); OpenAI and Grok Responses API strict
+  `json_schema` (Grok via the `openai` SDK at `api.x.ai/v1`, photos re-encoded to JPEG —
+  xAI lists no WebP). A paid but unusable output (refusal, truncation, bad shape) counts as
+  an error → backup. When every rung fails the self-check, the reading with the fewest
+  issues (then the smallest gap, then the later rung) is kept.
 
 ## Model comparison (`python -m backend.eval`)
 
@@ -81,6 +95,14 @@ the self-check passes on ≥ 90 % of receipts; the bad photos are flagged; < 30 
 The cheapest reliable model leads the ladder; the best reliable model of another provider is
 the backup. The report (per model: accuracy, seconds, tokens, cost) goes to `eval-out/`
 (git-ignored).
+
+Harness details (settled 2026-10-14): `name.jpg` is one receipt, `name.1.jpg`,
+`name.2.jpg` one receipt in parts; `name.expected.json` holds a Reading (a bad photo just
+`{"quality": [...]}`). Photos are normalised like the app stores them (≤ 2000 px WebP).
+Lines match greedily in order by name similarity (difflib ≥ 0.6) and need qty, unit price,
+total and discount exact; the line denominator is max(expected, read) so invented lines
+count. "< 30 s" is judged on the median. `--dry-run` prints the plan and an upper bound
+(output at `max_tokens`); real runs need `--yes`; a missing API key skips that model.
 
 ## Data model (SQLite `data/receipts.db`, WAL)
 
