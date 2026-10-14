@@ -11,9 +11,8 @@ Deferred and upcoming work. Delete an entry when it lands.
   is gone. **Writes to the real Sheet HomeExpenditure** since 2026-10-14 (switched from a
   test copy via `GOOGLE_SHEETS_ID` in the host `.env`; J1 renamed to БУЛСТАТ). New rows get
   the household's Цена лв formula, because the reports sum that column only.
-- First real receipts: #1 and #2 were written to the test copy only, and their row links
-  were cleared so they never touch the real Sheet. No row has been written to the real Sheet
-  yet: check the first one (row 1629, C filled, report total up).
+- First real-Sheet row checked by the user on 2026-10-14: row 1629, C formula 6,85 лв for
+  €3,50. Duplicate detection caught a real re-scan (Haiku, by header).
 - Duplicate detection live (schema v2). `data/backup/pre-migration-2.db` on the host can
   be deleted once v2 has run for a while — ask the user first.
 - Push from the `rebuild` worktree (`../receit-processor-wt-int`):
@@ -26,8 +25,8 @@ Deferred and upcoming work. Delete an entry when it lands.
 - 15–20 receipt photos in `tests/sample_receipts/` (see DESIGN.md "Model comparison"), and
   the paper originals of a few to check the expected values.
 - An OpenAI API key (cap $2) for the comparison; $2 caps in the Anthropic, Google and xAI
-  consoles. Anthropic had no credit on 2026-10-14; Sonnet then worked, so credit was
-  apparently added. Confirm from the log that Haiku answers too.
+  consoles. Anthropic credit was added 2026-10-14 and Haiku answers (4 s, $0.0007 a
+  receipt).
 - Optional: hide the "Цена лв" column (it now gets a formula; keep it).
 
 ## App rebuild (branch rebuild-app) — open points
@@ -41,6 +40,15 @@ Deferred and upcoming work. Delete an entry when it lands.
   QR read, so check this first: duplicates are caught for free only when the QR reads.
 - "Последни" shows no photo thumbnails (the stored photos are ~300 KB each); add small
   thumbnails if it is hard to tell receipts apart.
+
+- Receipt ids are reused: `receipt.id` is a plain INTEGER PRIMARY KEY, so deleting the
+  newest receipts hands their id to the next upload (seen 2026-10-14: a new scan became #2
+  again). Harmless now. Before the offers hand-off keys anything on the id, move to
+  AUTOINCREMENT or a stable uid.
+- A card not in ПлатежноСредство leaves Плащане empty (2026-10-14: card 0367). The user
+  then typed "Bulbank 4416" into row 1629 by hand, and an edit in the app would overwrite
+  it with "", because Плащане is an app column. Either keep a hand-set Плащане when the
+  app's value is empty, or get the user to set it in the app.
 
 ## Next
 - Model comparison → choose the ladder and the backup provider (cheapest reliable model
