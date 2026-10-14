@@ -175,7 +175,7 @@ __marimo__/
 # Project-specific
 service_account.json
 *.json
-!frontend/manifest.json
+
 !package.json
 .DS_Store
 Thumbs.db
@@ -185,3 +185,7 @@ tests/sample_receipts/*
 !tests/sample_receipts/.gitkeep
 eval-out/
 data/
+
+# built by scripts/build-css.sh / the Dockerfile css stage
+backend/static/app.css
+.cache/

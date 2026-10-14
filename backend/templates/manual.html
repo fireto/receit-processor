@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_macros.html" import options %}
+{% block title %}Ръчен разход — Бележки{% endblock %}
+{% block content %}
+<a href="/" class="btn btn-ghost btn-sm -ml-2.5">← Бележки</a>
+<h1 class="mt-2 text-xl font-semibold">Разход без бележка</h1>
+<p class="mt-1 text-sm muted">Записва се направо в таблицата.</p>
+{% if error %}<p class="notice notice-error mt-4" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/manual" class="card mt-5 grid gap-4 p-4">
+  <div class="grid grid-cols-2 gap-3">
+    <label class="grid gap-1.5"><span class="label">Дата</span>
+      <input type="date" name="date" value="{{ form.date }}" required class="input"></label>
+    <label class="grid gap-1.5"><span class="label">Сума, €</span>
+      <input type="text" name="total" value="{{ form.total }}" inputmode="decimal" placeholder="0,00" required class="input tabular-nums"></label>
+  </div>
+  <label class="grid gap-1.5"><span class="label">Категория</span>
+    <select name="category" required class="input">{{ options(categories, form.category, 'Избери…') }}</select></label>
+  <label class="grid gap-1.5"><span class="label">Плащане</span>
+    <select name="payment_method" class="input">{{ options(payment_methods, form.payment_method, '—') }}</select></label>
+  <label class="grid gap-1.5"><span class="label">Пояснения</span>
+    <input type="text" name="notes" value="{{ form.notes }}" class="input"></label>
+  <button class="btn btn-primary">Запиши в таблицата</button>
+</form>
+{% endblock %}

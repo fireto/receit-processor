@@ -1,0 +1,110 @@
+/* Tailwind v4 input. Built to backend/static/app.css by scripts/build-css.sh (dev) and
+   by the Dockerfile's css stage; the output is not committed. Look and components follow
+   the sister app offers (one emerald accent, light/dark). */
+@import "tailwindcss" source(none);
+@source "../templates";
+@source "../static/app.js";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans",
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-white shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 ring-zinc-900/[0.06]
+      dark:bg-zinc-900 dark:shadow-none dark:ring-white/[0.08];
+  }
+  .section-title {
+    @apply text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400;
+  }
+  .muted {
+    @apply text-zinc-500 dark:text-zinc-400;
+  }
+  .label {
+    @apply text-sm font-medium text-zinc-700 dark:text-zinc-300;
+  }
+  /* receipt status (STATUS_LABELS in backend/ui.py) */
+  .status {
+    @apply inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px]
+      font-medium ring-1;
+  }
+  .status-queued, .status-reading {
+    @apply animate-pulse bg-zinc-100 text-zinc-600 ring-zinc-900/10
+      dark:bg-white/[0.06] dark:text-zinc-300 dark:ring-white/10;
+  }
+  .status-ok {
+    @apply bg-emerald-50 text-emerald-700 ring-emerald-600/30
+      dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/30;
+  }
+  .status-check {
+    @apply bg-amber-50 text-amber-800 ring-amber-600/30
+      dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/30;
+  }
+  .status-retake {
+    @apply bg-orange-50 text-orange-800 ring-orange-600/30
+      dark:bg-orange-400/10 dark:text-orange-300 dark:ring-orange-400/30;
+  }
+  .status-failed {
+    @apply bg-red-50 text-red-700 ring-red-600/30
+      dark:bg-red-400/10 dark:text-red-300 dark:ring-red-400/30;
+  }
+  .btn {
+    @apply inline-flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-full px-5
+      text-sm font-medium whitespace-nowrap transition select-none
+      focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500
+      active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn:has(input:focus-visible) {
+    @apply outline-2 outline-offset-2 outline-emerald-500;
+  }
+  .btn-sm {
+    @apply h-9 px-3.5 text-[13px];
+  }
+  .btn-primary {
+    @apply bg-emerald-600 text-white hover:bg-emerald-700
+      dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400;
+  }
+  .btn-secondary {
+    @apply bg-zinc-900/[0.05] text-zinc-800 hover:bg-zinc-900/[0.09]
+      dark:bg-white/[0.08] dark:text-zinc-100 dark:hover:bg-white/[0.12];
+  }
+  .btn-ghost {
+    @apply px-2.5 text-zinc-500 hover:bg-zinc-900/[0.05] hover:text-zinc-900
+      dark:text-zinc-400 dark:hover:bg-white/[0.08] dark:hover:text-zinc-100;
+  }
+  .btn-danger {
+    @apply bg-red-600/10 text-red-700 hover:bg-red-600/15 dark:bg-red-500/15 dark:text-red-300;
+  }
+  .input {
+    @apply h-11 w-full min-w-0 rounded-xl bg-white px-3.5 text-[16px] ring-1 ring-zinc-900/10
+      outline-none transition placeholder:text-zinc-400 focus:ring-2 focus:ring-emerald-500
+      dark:bg-zinc-950 dark:ring-white/10 dark:placeholder:text-zinc-500;
+  }
+  select.input {
+    @apply appearance-none bg-[length:1.1rem] bg-[right_0.75rem_center] bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2371717a'%3E%3Cpath fill-rule='evenodd' d='M5.2 7.2a1 1 0 0 1 1.4 0L10 10.6l3.4-3.4a1 1 0 1 1 1.4 1.4l-4.1 4.1a1 1 0 0 1-1.4 0L5.2 8.6a1 1 0 0 1 0-1.4Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  }
+  .notice {
+    @apply rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900
+      dark:bg-emerald-500/10 dark:text-emerald-200;
+  }
+  .notice-warn {
+    @apply bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200;
+  }
+  .notice-error {
+    @apply bg-red-50 text-red-900 dark:bg-red-500/10 dark:text-red-200;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+[hidden] { display: none !important; }

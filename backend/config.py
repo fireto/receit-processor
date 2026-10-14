@@ -1,11 +1,18 @@
-"""Configuration: column mapping, constants."""
+"""Configuration: paths, column mapping, constants."""
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
-VERSION_MAJOR = 1
-VERSION_MINOR = 4
-VERSION_PATCH = 1
+# data/: the SQLite database and the photo store (a volume; restic backs it up)
+DATA_DIR = Path(os.environ.get("RECEIPTS_DATA", "data"))
+DB_PATH = DATA_DIR / "receipts.db"
+PHOTOS_DIR = DATA_DIR / "photos"
+
+VERSION_MAJOR = 2
+VERSION_MINOR = 0
+VERSION_PATCH = 0
 VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"
 
 # Bulgarian Lev to Euro fixed rate (currency board, pre-2026)

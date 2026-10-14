@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_chip, options, camera_icon %}
+{% set r = receipt %}
+{% set busy = r.status in ('queued', 'reading') %}
+{% block title %}{{ r.store_name or 'Бележка' }} — Бележки{% endblock %}
+{% block content %}
+<a href="/" class="btn btn-ghost btn-sm -ml-2.5">← Бележки</a>
+
+<div class="mt-2 flex items-start justify-between gap-3">
+  <div class="min-w-0">
+    <h1 class="text-xl font-semibold leading-tight">{{ r.store_name or ('Ръчен разход' if r.source == 'manual' else 'Бележка') }}</h1>
+    <p class="mt-1 text-sm muted">
+      {%- if r.store_address %}{{ r.store_address }} · {% endif %}{% if r.eik %}ЕИК {{ r.eik }} · {% endif %}качена {{ r.created_at|local }}
+    </p>
+  </div>
+  {{ status_chip(r.status) }}
+</div>
+
+<div class="mt-4 grid gap-3">
+  {% if saved == '1' %}<p class="notice" role="status">Запазено.</p>{% endif %}
+  {% if saved == 'pending' %}<p class="notice notice-warn" role="status">Запазено. Таблицата ще бъде обновена, щом Google отговори.</p>{% endif %}
+  {% if error %}<p class="notice notice-error" role="alert">{{ error }}</p>{% endif %}
+
+  {% if busy %}
+    {% include "_state.html" %}
+  {% elif r.status == 'check' %}
+    <div class="notice notice-warn">
+      <p>Прочетена, но проверката не мина{% if check and not check.ok %} — сборът на редовете не съвпада с общата сума{% endif %}. Провери сумата и датата, поправи ги ако трябва и потвърди.</p>
+      <form method="post" action="/receipts/{{ r.id }}/confirm" class="mt-3">
+        <button class="btn btn-primary btn-sm">Потвърди</button>
+      </form>
+    </div>
+  {% elif r.status == 'retake' %}
+    <p class="notice notice-warn">Снимката не става{% if quality %}: {% for q in quality %}{{ QUALITY_LABELS.get(q, q) }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}. Снимай бележката отново.</p>
+  {% elif r.status == 'failed' %}
+    <div class="notice notice-error">
+      <p>Не успях да я прочета (никой модел не отговори).</p>
+      <form method="post" action="/receipts/{{ r.id }}/retry" class="mt-3">
+        <button class="btn btn-secondary btn-sm">Опитай пак</button>
+      </form>
+    </div>
+  {% elif r.status == 'ok' %}
+    <p class="text-sm muted">
+      {%- if r.sheet_row and r.sheet_written_at %}В таблицата, ред {{ r.sheet_row }}.
+      {%- elif r.sheet_row %}В таблицата, ред {{ r.sheet_row }} — промените чакат запис.
+      {%- else %}Чака запис в таблицата.{% endif %}
+    </p>
+  {% endif %}
+</div>
+
+{% if photos %}
+<section class="-mx-4 mt-5 flex snap-x gap-3 overflow-x-auto px-4 pb-2 no-scrollbar" aria-label="Снимки">
+  {% for p in photos %}
+  <a href="/receipts/{{ r.id }}/photos/{{ p.seq }}" target="_blank" class="shrink-0 snap-start">
+    <img src="/receipts/{{ r.id }}/photos/{{ p.seq }}" alt="Снимка {{ p.seq }}" width="{{ p.width }}" height="{{ p.height }}" loading="lazy" decoding="async" class="h-64 w-auto rounded-xl bg-white object-contain ring-1 ring-zinc-900/[0.06] dark:ring-white/[0.08]">
+  </a>
+  {% endfor %}
+</section>
+{% endif %}
+
+<form method="post" action="/receipts/{{ r.id }}" class="card mt-5 grid gap-4 p-4">
+  <div class="grid grid-cols-2 gap-3">
+    <label class="grid gap-1.5"><span class="label">Дата</span>
+      <input type="date" name="date" value="{{ r.date or '' }}" required class="input"></label>
+    <label class="grid gap-1.5"><span class="label">Сума, €</span>
+      <input type="text" name="total" value="{{ r.total_cents|amount }}" inputmode="decimal" placeholder="0,00" required class="input tabular-nums"></label>
+  </div>
+  <label class="grid gap-1.5"><span class="label">Категория</span>
+    <select name="category" class="input">{{ options(categories, r.category, '—') }}</select></label>
+  <label class="grid gap-1.5"><span class="label">Плащане{% if r.card_last4 %} <span class="font-normal muted">· карта ****{{ r.card_last4 }}</span>{% elif r.payment == 'cash' %} <span class="font-normal muted">· в брой</span>{% endif %}</span>
+    <select name="payment_method" class="input">{{ options(payment_methods, r.payment_method, '—') }}</select></label>
+  <label class="grid gap-1.5"><span class="label">Пояснения</span>
+    <input type="text" name="notes" value="{{ r.notes or '' }}" class="input"></label>
+  <button class="btn btn-primary">Запази</button>
+</form>
+
+{% if lines %}
+<section class="mt-8" aria-labelledby="lines-title">
+  <h2 id="lines-title" class="section-title">Артикули{% if r.time %} · {{ r.time }}{% endif %}</h2>
+  <div class="card mt-3 overflow-hidden">
+    <ul class="divide-y divide-zinc-900/[0.06] dark:divide-white/[0.06]">
+      {% for l in lines %}
+      <li class="flex items-start justify-between gap-3 px-4 py-2.5 text-sm">
+        <div class="min-w-0">
+          <div class="break-words">{{ l.name }}</div>
+          <div class="text-xs muted tabular-nums">{{ l.qty|qty(l.unit) }}{% if l.unit_price_cents is not none %} × {{ l.unit_price_cents|eur }}{% endif %}{% if l.vat_group %} · {{ l.vat_group }}{% endif %}</div>
+        </div>
+        <div class="shrink-0 text-right tabular-nums">
+          <div>{{ l.total_cents|eur }}</div>
+          {% if l.discount_cents %}<div class="text-xs text-emerald-700 dark:text-emerald-400">{{ (-l.discount_cents)|eur }}</div>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+      {% for d in discounts %}
+      <li class="flex justify-between gap-3 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+        <span>{{ d.name }}</span><span class="tabular-nums">{{ (-d.cents)|eur }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if check %}
+    <div class="border-t border-zinc-900/[0.06] px-4 py-3 text-sm dark:border-white/[0.06]" data-sum-check="{{ 'ok' if check.ok else 'off' }}">
+      <div class="flex justify-between gap-3 tabular-nums"><span class="muted">Сбор на редовете{% if check.discounts_cents %} − отстъпки{% endif %}</span><span>{{ (check.lines_cents - check.discounts_cents)|eur }}</span></div>
+      <div class="flex justify-between gap-3 tabular-nums"><span class="muted">Обща сума</span><span class="font-semibold">{{ r.total_cents|eur }}</span></div>
+      {% if check.ok %}
+      <p class="mt-1.5 font-medium text-emerald-700 dark:text-emerald-400">✓ Сборът съвпада</p>
+      {% elif check.diff_cents is not none %}
+      <p class="mt-1.5 font-medium text-amber-700 dark:text-amber-400">Разлика: {{ check.diff_cents|eur }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+{% if r.source != 'manual' %}
+<section class="mt-8 grid gap-3" aria-label="Действия">
+  {% if not busy and r.next_start_at is not none %}
+  <form method="post" action="/receipts/{{ r.id }}/reread">
+    <button class="btn btn-secondary w-full">Прочети отново <span class="muted">(с по-силен модел)</span></button>
+  </form>
+  {% endif %}
+  {% if not busy %}
+  <form method="post" action="/receipts/{{ r.id }}/retake" enctype="multipart/form-data" data-capture>
+    <label class="btn {{ 'btn-primary' if r.status == 'retake' else 'btn-secondary' }} w-full">
+      {{ camera_icon() }} Снимай отново
+      <input type="file" name="photos" accept="image/*" capture="environment" class="sr-only" data-camera>
+    </label>
+    <div data-pending hidden class="mt-3">
+      <div data-thumbs class="flex gap-2"></div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" class="btn btn-secondary" data-more>＋ още снимка</button>
+        <button type="submit" class="btn btn-primary flex-1" data-send>Изпрати</button>
+        <button type="button" class="btn btn-ghost" data-cancel>Откажи</button>
+      </div>
+    </div>
+    <p data-error class="notice notice-error mt-3" hidden></p>
+    <noscript><button class="btn btn-secondary mt-2 w-full">Изпрати новата снимка</button></noscript>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
+<form method="post" action="/receipts/{{ r.id }}/delete" class="mt-8" data-confirm="Да изтрия ли бележката{% if r.sheet_row %} и реда ѝ в таблицата{% endif %}?">
+  <button class="btn btn-danger w-full">Изтрий</button>
+</form>
+
+{% if readings %}
+<details class="mt-8 text-sm">
+  <summary class="cursor-pointer muted">Четения ({{ readings|length }})</summary>
+  <ul class="mt-2 grid gap-1 text-xs muted tabular-nums">
+    {% for a in readings %}
+    <li>{{ a.started_at|local }} · {{ a.provider }} {{ a.model }} · {{ a.outcome }}{% if a.seconds is not none %} · {{ '%.1f'|format(a.seconds) }} s{% endif %}{% if a.cost_usd is not none %} · ${{ '%.4f'|format(a.cost_usd) }}{% endif %}{% if a.error %} · {{ a.error }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+{% endblock %}
