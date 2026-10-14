@@ -419,3 +419,37 @@ def test_misread_eik_is_explained_and_can_be_corrected(client, conn, sheet):
     assert resp.status_code == 303
     assert conn.execute("SELECT eik FROM receipt").fetchone()[0] == "131071587"
     assert "изглежда прочетен грешно" not in body(client.get(f"/receipts/{rid}"))
+
+
+def _add(conn, n, status="ok"):
+    for i in range(n):
+        conn.execute("INSERT INTO receipt (created_at, status, source, store_name, total_cents) "
+                     "VALUES (?, ?, 'camera', ?, 100)",
+                     (f"2026-09-{1 + i % 28:02d}T10:{i % 60:02d}:00+00:00", status, f"Магазин {i}"))
+    conn.commit()
+
+
+def test_home_links_all_receipts(client, conn):
+    _add(conn, 25)
+    html = body(client.get("/"))
+    assert 'href="/receipts"' in html and "Всички бележки (25)" in html
+
+
+def test_all_receipts_pages_through_everything(client, conn):
+    _add(conn, 60)
+    html = body(client.get("/receipts"))
+    assert html.count('href="/receipts/') == 50
+    assert 'href="/receipts?page=2"' in html
+    html2 = body(client.get("/receipts?page=2"))
+    assert html2.count("Магазин") == 10
+    assert 'href="/receipts?page=3"' not in html2
+
+
+def test_all_receipts_filters_by_status(client, conn):
+    _add(conn, 3)
+    _add(conn, 2, status="check")
+    html = body(client.get("/receipts?status=check"))
+    assert html.count("Магазин") == 2
+    assert 'href="/receipts?status=check"' in html  # the chip, marked current
+    assert "провери (2)" in html
+    assert body(client.get("/receipts?status=bogus")).count("Магазин") == 5

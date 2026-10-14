@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import receipt_row %}
+{% block title %}Всички бележки — Бележки{% endblock %}
+{% block content %}
+<a href="/" class="btn btn-ghost btn-sm -ml-2.5">← Бележки</a>
+<h1 class="mt-2 text-xl font-semibold">Всички бележки</h1>
+
+<nav class="mt-4 flex flex-wrap gap-2" aria-label="Филтър">
+  <a href="/receipts" class="chip{% if not status %} chip-on{% endif %}"{% if not status %} aria-current="page"{% endif %}>всички ({{ total }})</a>
+  {% for s in review if counts.get(s) %}
+  <a href="/receipts?status={{ s }}" class="chip{% if status == s %} chip-on{% endif %}"{% if status == s %} aria-current="page"{% endif %}>{{ STATUS_LABELS[s] }} ({{ counts[s] }})</a>
+  {% endfor %}
+</nav>
+
+{% if rows %}
+<ul class="card mt-4 divide-y divide-zinc-900/[0.06] overflow-hidden dark:divide-white/[0.06]">
+  {% for r in rows %}{{ receipt_row(r) }}{% endfor %}
+</ul>
+{% else %}
+<p class="mt-4 text-sm muted">Няма такива бележки.</p>
+{% endif %}
+
+<div class="mt-4 flex justify-between gap-3">
+  {% if page > 1 %}<a href="/receipts?{% if status %}status={{ status }}&amp;{% endif %}page={{ page - 1 }}" class="btn btn-secondary btn-sm">← По-нови</a>{% else %}<span></span>{% endif %}
+  {% if more %}<a href="/receipts?{% if status %}status={{ status }}&amp;{% endif %}page={{ page + 1 }}" class="btn btn-secondary btn-sm">По-стари →</a>{% endif %}
+</div>
+{% endblock %}

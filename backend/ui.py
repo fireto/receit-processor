@@ -110,7 +110,22 @@ def _error(request: Request, message: str, status_code: int = 400) -> HTMLRespon
 # --- home and capture ----------------------------------------------------------------------
 
 def _recent_ctx(conn) -> dict:
-    return {"recent": receipts.recent(conn), "busy": receipts.busy(conn)}
+    return {"recent": receipts.recent(conn), "busy": receipts.busy(conn),
+            "total": sum(receipts.status_counts(conn).values())}
+
+
+REVIEW_STATUSES = ("check", "retake", "failed", "duplicate")
+
+
+@router.get("/receipts", response_class=HTMLResponse)
+def all_receipts(request: Request, status: str = "", page: int = 1,
+                 conn: sqlite3.Connection = Conn):
+    status = status if status in receipts.STATUSES else ""
+    page = max(page, 1)
+    rows, more = receipts.page(conn, status or None, page)
+    counts = receipts.status_counts(conn)
+    return render(request, "all.html", rows=rows, more=more, page=page, status=status,
+                  counts=counts, total=sum(counts.values()), review=REVIEW_STATUSES)
 
 
 @router.get("/", response_class=HTMLResponse)

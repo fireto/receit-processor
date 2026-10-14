@@ -365,6 +365,20 @@ def recent(conn, limit: int = 20) -> list[sqlite3.Row]:
                         (limit,)).fetchall()
 
 
+def page(conn, status: str | None = None, page_no: int = 1, per_page: int = 50
+         ) -> tuple[list[sqlite3.Row], bool]:
+    """All receipts newest first, optionally of one status: (rows of the page, more?)."""
+    where, args = ("WHERE status = ?", [status]) if status in STATUSES else ("", [])
+    rows = conn.execute(f"SELECT * FROM receipt {where} ORDER BY created_at DESC, id DESC "
+                        "LIMIT ? OFFSET ?",
+                        (*args, per_page + 1, (max(page_no, 1) - 1) * per_page)).fetchall()
+    return rows[:per_page], len(rows) > per_page
+
+
+def status_counts(conn) -> dict[str, int]:
+    return dict(conn.execute("SELECT status, count(*) FROM receipt GROUP BY status").fetchall())
+
+
 def busy(conn) -> bool:
     return conn.execute("SELECT EXISTS (SELECT 1 FROM receipt "
                         "WHERE status IN ('queued', 'reading'))").fetchone()[0] == 1
