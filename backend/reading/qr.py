@@ -10,6 +10,7 @@ import logging
 from decimal import Decimal, InvalidOperation
 
 logger = logging.getLogger(__name__)
+_warned_missing = False
 
 
 def parse_qr_text(text: str) -> dict | None:
@@ -40,7 +41,10 @@ def decode_qr(image: bytes) -> dict | None:
         from PIL import Image
         from pyzbar.pyzbar import decode as pyzbar_decode
     except ImportError:
-        logger.warning("pyzbar/zbar or Pillow not available, skipping QR decode")
+        global _warned_missing
+        if not _warned_missing:
+            logger.warning("pyzbar/zbar or Pillow not available, skipping QR decode")
+            _warned_missing = True
         return None
     try:
         codes = pyzbar_decode(Image.open(io.BytesIO(image)))
