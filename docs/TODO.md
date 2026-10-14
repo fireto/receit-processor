@@ -39,3 +39,14 @@ Deferred and upcoming work. Delete an entry when it lands.
   ЕИКs that are not its chains. Designed together with the offers side (review screen,
   matching, purchases, price corrections) in its own grilling round.
 - Move the deployment to `/opt/lab/receit-processor`; restore-test the receipts backup.
+
+## Reading module (added 2026-10-14, branch `reading`)
+- First real comparison run (`python -m backend.eval --dry-run`, then `--yes` with the
+  user's approval): pick Gemini/OpenAI/Grok model ids, set their prices in
+  `READING_PRICES`, then fix `READING_LADDER` / `READING_BACKUP`.
+- Unverified against the live APIs (only against the SDKs' request serialisation): the
+  shared schema (nullable type arrays, enums) on Gemini Interactions and xAI; `store=False`
+  on xAI's Responses API; Haiku 5.5 effort default vs explicit `@low`.
+- QR decoding is untested locally (no zbar shared library on the dev machine) — check it in
+  the Docker image with a real receipt.
+- HEIC samples need `pillow-heif` (not a dependency); convert them or add it if needed.
