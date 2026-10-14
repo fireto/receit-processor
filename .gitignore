@@ -179,3 +179,9 @@ service_account.json
 !package.json
 .DS_Store
 Thumbs.db
+
+# Real receipt photos used for the parsing eval: personal data, never committed
+tests/sample_receipts/*
+!tests/sample_receipts/.gitkeep
+eval-out/
+data/
