@@ -12,7 +12,9 @@ from backend.sheets import (
     get_last_row_number,
     get_payment_methods,
     lookup_category_by_bulstat,
+    get_row,
     update_cell,
+    update_expense,
 )
 
 
@@ -77,9 +79,12 @@ class TestAppendExpense:
     def test_comma_decimal_format(self, mock_gspread, sample_receipt_data):
         append_expense(sample_receipt_data)
         row = mock_gspread.append_row.call_args[0][0]
-        # BGN and EUR should use comma as decimal separator
-        assert "," in row[2]  # Цена лв
-        assert "," in row[3]  # Цена €
+        assert row[3] == "23,45"  # Цена €, comma as decimal separator
+
+    def test_bgn_column_left_empty(self, mock_gspread, sample_receipt_data):
+        append_expense(sample_receipt_data)
+        row = mock_gspread.append_row.call_args[0][0]
+        assert row[2] == ""  # Цена лв: history only, not written for new rows
 
 
 class TestUpdateCell:
@@ -96,6 +101,30 @@ class TestUpdateCell:
     def test_unknown_column_raises(self, mock_gspread):
         with pytest.raises(ValueError, match="Unknown column"):
             update_cell(1, "NonExistent", "value")
+
+
+class TestUpdateExpense:
+    def test_writes_the_app_owned_columns_of_the_row(self, mock_gspread, sample_receipt_data):
+        sample_receipt_data.bulstat = "131129282"
+        update_expense(7, sample_receipt_data)
+
+        mock_gspread.batch_update.assert_called_once()
+        updates = mock_gspread.batch_update.call_args[0][0]
+        assert updates == [
+            {"range": "A7:B7", "values": [["15.02.2026", "Храна"]]},
+            {"range": "D7", "values": [["23,45"]]},
+            {"range": "F7", "values": [["Revolut"]]},
+            {"range": "I7:J7", "values": [["хляб, мляко, сирене", "131129282"]]},
+        ]
+        assert mock_gspread.batch_update.call_args[1]["value_input_option"] == "USER_ENTERED"
+
+
+class TestGetRow:
+    def test_returns_the_row_values_by_column_name(self, mock_gspread):
+        mock_gspread.row_values.return_value = ["15.02.2026", "Храна", "", "23,45"]
+        assert get_row(4) == {"Дата": "15.02.2026", "Категория": "Храна", "Цена лв": "",
+                              "Цена €": "23,45"}
+        mock_gspread.row_values.assert_called_once_with(4)
 
 
 class TestDeleteRow:

@@ -48,7 +48,7 @@ class ReceiptData:
         return [
             self.date,
             self.category,
-            f"{self.total_bgn:.2f}".replace(".", ","),
+            "",  # Цена лв — history only; new rows are in euro
             f"{self.total_eur:.2f}".replace(".", ","),
             "",  # GGBG лв — filled manually
             self.payment_method or "",
