@@ -4,3 +4,4 @@ pytest-asyncio>=0.25.0
 httpx>=0.28.0
 respx>=0.22.0
 playwright>=1.49.0
+qrcode>=8.0
