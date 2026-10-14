@@ -42,8 +42,8 @@ class Reading:
     category: str | None = "Храна"
     notes: str | None = "хляб, мляко, сирене"
     lines: list[Line] = field(default_factory=lambda: [
-        Line("Хляб Добруджа", 189, unit_price_cents=189),
-        Line("Мляко Верея 3%", 345, unit_price_cents=395, discount_cents=50),
+        Line("Хляб Добруджа", 139, unit_price_cents=139),
+        Line("Мляко Верея 3%", 395, unit_price_cents=395, discount_cents=50),
         Line("Сирене краве", 750, qty=0.5, unit="kg", unit_price_cents=1500),
     ])
     receipt_discounts: list[Discount] = field(default_factory=list)
