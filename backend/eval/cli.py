@@ -18,6 +18,7 @@ from backend.eval.inputs import Sample, discover, prepare_photo
 from backend.eval.report import write_csv, write_report
 from backend.eval.scoring import score_receipt, summarise
 from backend.reading.ladder import run_attempt
+from backend.reading.models import Discount, Line, Reading, SelfCheck
 from backend.reading.pricing import price_for
 from backend.reading.providers import ModelSpec, key_env
 from backend.reading.providers.base import MAX_OUTPUT_TOKENS
@@ -54,6 +55,9 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs", type=int, default=4, help="parallel calls (default 4)")
     p.add_argument("--dry-run", action="store_true", help="no API calls: plan + cost estimate")
     p.add_argument("--yes", action="store_true", help="really call the models (costs money)")
+    p.add_argument("--rescore", type=Path, metavar="RUN_DIR",
+                   help="score a finished run's raw outputs again (e.g. after correcting "
+                        "the expected values); no API call")
     return p
 
 
@@ -157,6 +161,49 @@ def _compare(specs: list[ModelSpec], samples: list[Sample], categories: list[str
     return 0
 
 
+def _raw_reading(data: dict | None) -> Reading | None:
+    if not data:
+        return None
+    return Reading(**{**data, "lines": [Line(**x) for x in data.get("lines") or []],
+                      "receipt_discounts": [Discount(**d)
+                                            for d in data.get("receipt_discounts") or []]})
+
+
+def _rescore(run_dir: Path, samples: list[Sample]) -> int:
+    """Score the raw outputs of a finished (or stopped) run against the current expected
+    values; writes results-rescored.csv and report-rescored.md next to them."""
+    by_name = {s.name: s for s in samples}
+    scores, labels = [], []
+    for model_dir in sorted(p for p in (run_dir / "raw").iterdir() if p.is_dir()):
+        label = None
+        for path in sorted(model_dir.glob("*.json")):
+            sample = by_name.get(path.stem)
+            if sample is None:
+                continue
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            a = raw["attempt"]
+            if label is None:
+                label = f"{a['provider']}:{a['model']}"
+                if model_dir.name.startswith(_safe(ModelSpec.parse(label)) + "_"):
+                    label += "@" + model_dir.name[len(_safe(ModelSpec.parse(label))) + 1:]
+                labels.append(label)
+            check = raw.get("self_check")
+            scores.append(score_receipt(
+                sample.name, label, sample.expected, _raw_reading(raw.get("reading")),
+                SelfCheck(**check) if check else None, seconds=a["seconds"],
+                input_tokens=a["input_tokens"], output_tokens=a["output_tokens"],
+                cost_usd=a["cost_usd"], error=a.get("error")))
+    summaries = [summarise(m, [s for s in scores if s.model == m]) for m in labels]
+    names = {s.receipt for s in scores}
+    write_csv(run_dir / "results-rescored.csv", scores)
+    write_report(run_dir / "report-rescored.md", title=f"{run_dir.name} (rescored)",
+                 n_receipts=len(names),
+                 n_photos=sum(len(by_name[n].photos) for n in names),
+                 summaries=summaries, scores=scores, notes=[])
+    print(f"Report: {run_dir / 'report-rescored.md'}")
+    return 0
+
+
 def _draft(spec: ModelSpec, samples: list[Sample], categories: list[str]) -> int:
     missing = _missing_key(spec)
     if missing:
@@ -182,6 +229,8 @@ def _draft(spec: ModelSpec, samples: list[Sample], categories: list[str]) -> int
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.rescore:
+        return _rescore(args.rescore, discover(args.samples))
     if not args.models and not args.draft_expected:
         print("give --models and/or --draft-expected", file=sys.stderr)
         return 2

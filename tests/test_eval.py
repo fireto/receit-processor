@@ -301,3 +301,32 @@ def test_dry_run_draft_counts_only_receipts_without_expected(samples, no_calls, 
     est = cli.estimate_cost(ModelSpec.parse("claude:claude-opus-5-5"), n_receipts=1, n_photos=2)
     # keys missing: the total still shows what the run would cost with every key set
     assert f"${est[1]:.4f}" in out.splitlines()[-1]
+
+
+def test_rescore_rebuilds_the_report_from_raw_outputs_without_calls(samples, tmp_path,
+                                                                     monkeypatch, capsys):
+    fake = FakeProviders(expected_dict())
+    monkeypatch.setattr("backend.reading.ladder.get_provider", fake.factory)
+    monkeypatch.setattr("backend.eval.cli.decode_qr", lambda img: None)
+    out_root = tmp_path / "eval-out"
+    cli.main(["--samples", str(samples), "--models", "claude:claude-haiku-5-5", "--yes",
+              "--out", str(out_root)])
+    run_dir = next(out_root.iterdir())
+    # the expected values are corrected by hand afterwards: one line total was wrong
+    corrected = expected_dict()
+    corrected["lines"][0]["total_cents"] += 1
+    (samples / "one.expected.json").write_text(json.dumps(corrected), encoding="utf-8")
+
+    def boom(*a, **k):
+        raise AssertionError("no provider call allowed")
+
+    monkeypatch.setattr("backend.reading.ladder.get_provider", boom)
+    rc = cli.main(["--samples", str(samples), "--rescore", str(run_dir)])
+
+    assert rc == 0
+    rows = list(csv.DictReader((run_dir / "results-rescored.csv").open(encoding="utf-8")))
+    one = next(r for r in rows if r["receipt"] == "one")
+    assert one["lines_ok"] == "2"  # scored against the corrected values
+    assert one["model"] == "claude:claude-haiku-5-5"
+    assert "claude:claude-haiku-5-5" in (run_dir / "report-rescored.md").read_text(
+        encoding="utf-8")
