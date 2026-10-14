@@ -35,6 +35,11 @@ first, then in code.
      glare, not a receipt). Re-taking replaces the photos of the same receipt (same id,
      same Sheet row if one exists) and queues it again.
    - `failed` — every provider errored; "Опитай пак" re-queues.
+   - `duplicate` (*дубликат*) — the same receipt scanned again: the same fiscal QR code
+     (fiscal device + receipt number; checked before reading, so it costs nothing) or the
+     same ЕИК, date, minute and total as an older receipt. Not written to the Sheet. The
+     page links the original and offers *Изтрий* or *Не е дубликат* (back to the status it
+     would have had, or read if it was stopped by its QR; never flagged again).
 4. **Receipt page.** Photos (tap = full size), the receipt-level fields editable (date,
    total, category, payment method, notes), the line items read-only with the sum check,
    and actions: *Потвърди* (for `check`), *Прочети отново* (re-read on the next model up the
@@ -108,7 +113,8 @@ count. "< 30 s" is judged on the median. `--dry-run` prints the plan and an uppe
 
 - `receipt`: id, created_at, status, source (`camera`/`gallery`/`manual`), header fields,
   `category`, `payment_method`, `notes`, `qr_json`, `self_check_json`, `quality_json`,
-  `sheet_row` (NULL until written), `sheet_written_at`, `confirmed_at`.
+  `sheet_row` (NULL until written), `sheet_written_at`, `confirmed_at`, `duplicate_of`,
+  `duplicate_held_status`, `duplicate_dismissed`.
 - `receipt_photo`: receipt_id, seq, path, width, height.
 - `receipt_line`: receipt_id, seq, name, qty, unit, unit_price_cents, total_cents,
   discount_cents, vat_group.

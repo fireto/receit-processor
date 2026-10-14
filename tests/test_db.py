@@ -69,3 +69,32 @@ def test_deleting_a_receipt_removes_its_rows_but_keeps_the_readings(tmp_path):
         assert conn.execute(f"SELECT count(*) FROM {t}").fetchone()[0] == 0
     # the spend history stays: deleting a receipt must not reset this month's cost
     assert [tuple(r) for r in conn.execute("SELECT receipt_id FROM reading")] == [(None,)]
+
+
+def test_migration_2_keeps_v1_receipts_and_their_children(tmp_path):
+    # The receipt table is rebuilt (new status in its CHECK); with foreign keys on, the
+    # DROP would cascade-delete every photo and line.
+    conn = db.connect(tmp_path / "receipts.db")
+    conn.executescript(f"BEGIN; {db.MIGRATIONS[0]}; PRAGMA user_version = 1; COMMIT;")
+    conn.execute("INSERT INTO receipt (id, created_at, status, source, total_cents, sheet_row) "
+                 "VALUES (7, '2026-10-14T10:00:00+00:00', 'ok', 'camera', 425, 12)")
+    conn.execute("INSERT INTO receipt_photo VALUES (7, 1, '7/1.webp', 10, 20)")
+    conn.execute("INSERT INTO receipt_line (receipt_id, seq, name, total_cents) "
+                 "VALUES (7, 1, 'Хляб', 425)")
+    conn.execute("INSERT INTO reading (receipt_id, provider, model, started_at, outcome) "
+                 "VALUES (7, 'claude', 'm', '2026-10-14T10:00:00+00:00', 'ok')")
+    conn.commit()
+
+    db.migrate(conn)
+
+    assert conn.execute("SELECT total_cents, sheet_row FROM receipt WHERE id = 7").fetchone()[:] \
+        == (425, 12)
+    for table in ("receipt_photo", "receipt_line", "reading"):
+        assert conn.execute(f"SELECT count(*) FROM {table} WHERE receipt_id = 7").fetchone()[0] == 1
+    assert {"duplicate_of", "duplicate_held_status", "duplicate_dismissed"} <= set(
+        columns(conn, "receipt"))
+    assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+    conn.execute("UPDATE receipt SET status = 'duplicate' WHERE id = 7")  # allowed now
+    conn.execute("DELETE FROM receipt WHERE id = 7")  # cascades still work
+    assert conn.execute("SELECT count(*) FROM receipt_photo").fetchone()[0] == 0
+    assert conn.execute("SELECT receipt_id FROM reading").fetchone()[0] is None

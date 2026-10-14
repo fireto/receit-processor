@@ -96,6 +96,61 @@ MIGRATIONS = [
     CREATE INDEX reading_started ON reading (started_at);
     CREATE INDEX reading_receipt ON reading (receipt_id);
     """,
+    # 2 — duplicates: a new status (the CHECK needs a table rebuild, run with foreign keys
+    # off — see migrate) and the duplicate columns
+    """
+    CREATE TABLE receipt_v2 (
+        id               INTEGER PRIMARY KEY,
+        created_at       TEXT NOT NULL,
+        status           TEXT NOT NULL CHECK (status IN
+                             ('queued', 'reading', 'ok', 'check', 'retake', 'failed',
+                              'duplicate')),
+        source           TEXT NOT NULL CHECK (source IN ('camera', 'gallery', 'manual')),
+        -- header, as read (and edited)
+        date             TEXT,
+        time             TEXT,
+        total_cents      INTEGER,
+        eik              TEXT,
+        store_name       TEXT,
+        store_address    TEXT,
+        payment          TEXT CHECK (payment IN ('cash', 'card')),
+        card_last4       TEXT,
+        category         TEXT,
+        payment_method   TEXT,             -- a value of the Sheet's ПлатежноСредство
+        notes            TEXT,
+        qr_json          TEXT,
+        self_check_json  TEXT,
+        quality_json     TEXT,
+        -- reading queue: start_at is the ladder index the next reading starts at,
+        -- next_start_at the one "Прочети отново" would use (NULL: no better model)
+        queued_at        TEXT,
+        start_at         INTEGER NOT NULL DEFAULT 0,
+        next_start_at    INTEGER,
+        -- Google Sheet: the row, and when it was last written (NULL with status ok:
+        -- a write or an update is pending)
+        sheet_row        INTEGER,
+        sheet_written_at TEXT,
+        confirmed_at     TEXT,
+        -- the same receipt scanned again: the older receipt it repeats (NULL once that
+        -- one is deleted), the status it would have had, and "Не е дубликат" given
+        duplicate_of          INTEGER REFERENCES receipt(id) ON DELETE SET NULL,
+        duplicate_held_status TEXT,
+        duplicate_dismissed   INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT INTO receipt_v2 (id, created_at, status, source, date, time, total_cents, eik,
+        store_name, store_address, payment, card_last4, category, payment_method, notes,
+        qr_json, self_check_json, quality_json, queued_at, start_at, next_start_at,
+        sheet_row, sheet_written_at, confirmed_at)
+    SELECT id, created_at, status, source, date, time, total_cents, eik,
+        store_name, store_address, payment, card_last4, category, payment_method, notes,
+        qr_json, self_check_json, quality_json, queued_at, start_at, next_start_at,
+        sheet_row, sheet_written_at, confirmed_at FROM receipt;
+    DROP TABLE receipt;
+    ALTER TABLE receipt_v2 RENAME TO receipt;
+    CREATE INDEX receipt_status ON receipt (status, queued_at);
+    CREATE INDEX receipt_created ON receipt (created_at);
+    CREATE INDEX receipt_duplicate_key ON receipt (eik, date, total_cents);
+    """,
 ]
 
 
@@ -113,5 +168,16 @@ def connect(path: Path | str) -> sqlite3.Connection:
 def migrate(conn: sqlite3.Connection) -> None:
     """Run the pending migrations."""
     version = conn.execute("PRAGMA user_version").fetchone()[0]
-    for i, step in enumerate(MIGRATIONS[version:], start=version + 1):
-        conn.executescript(f"BEGIN; {step}; PRAGMA user_version = {i}; COMMIT;")
+    if version == len(MIGRATIONS):
+        return
+    # Off for the run: a table rebuild's DROP would otherwise cascade into the child
+    # tables (the pragma is a no-op inside a transaction, so it is set out here).
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        for i, step in enumerate(MIGRATIONS[version:], start=version + 1):
+            conn.executescript(f"BEGIN; {step}; PRAGMA user_version = {i}; COMMIT;")
+        broken = conn.execute("PRAGMA foreign_key_check").fetchall()
+        if broken:
+            raise RuntimeError(f"foreign key check failed after migrating: {broken[:5]}")
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")

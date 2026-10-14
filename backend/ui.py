@@ -26,7 +26,8 @@ BASE = Path(__file__).parent
 STATIC_DIR = BASE / "static"
 
 STATUS_LABELS = {"queued": "обработва се…", "reading": "обработва се…", "ok": "✓",
-                 "check": "провери", "retake": "снимай отново", "failed": "грешка"}
+                 "check": "провери", "retake": "снимай отново", "failed": "грешка",
+                 "duplicate": "дубликат"}
 QUALITY_LABELS = {"blurry": "размазана", "cut_top": "отрязан горен край",
                   "cut_bottom": "отрязан долен край", "glare": "отблясък",
                   "not_a_receipt": "не е бележка"}
@@ -229,6 +230,14 @@ def edit_receipt(request: Request, rid: int, date_: str = Form("", alias="date")
 def confirm(request: Request, rid: int, conn: sqlite3.Connection = Conn):
     _receipt(conn, rid)
     receipts.confirm(conn, get_sheet(request), rid)
+    return see_other(f"/receipts/{rid}")
+
+
+@router.post("/receipts/{rid}/not-duplicate")
+def not_duplicate(request: Request, rid: int, conn: sqlite3.Connection = Conn):
+    _receipt(conn, rid)
+    if receipts.dismiss_duplicate(conn, get_sheet(request), rid) == "queued":
+        wake_reader(request)
     return see_other(f"/receipts/{rid}")
 
 

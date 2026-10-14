@@ -198,7 +198,7 @@ def test_retake_keeps_the_id_and_updates_the_same_sheet_row(env):
     conn, sheet, photos_dir, worker = env
     other = new_receipt(conn, photos_dir)
     rid = new_receipt(conn, photos_dir)
-    reader = FakeReader(Outcome(), Outcome(),
+    reader = FakeReader(Outcome(), Outcome(reading=Reading(total_cents=1500)),
                         Outcome(reading=Reading(total_cents=2000, notes="нова снимка")))
     w = worker(reader)
     w.process_next(), w.process_next()
@@ -299,7 +299,7 @@ def test_edit_of_an_unwritten_receipt_does_not_write(env):
 def test_delete_deletes_the_row_and_shifts_the_rows_below(env):
     conn, sheet, photos_dir, worker = env
     a, b, c = (new_receipt(conn, photos_dir) for _ in range(3))
-    w = worker(FakeReader())
+    w = worker(FakeReader(*(Outcome(reading=Reading(total_cents=100 * n)) for n in (1, 2, 3))))
     for _ in range(3):
         w.process_next()
     assert [receipt(conn, x)["sheet_row"] for x in (a, b, c)] == [2, 3, 4]

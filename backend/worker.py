@@ -77,6 +77,11 @@ class Worker:
         rid = r["id"]
         images = receipts.photo_bytes(conn, self.photos_dir, rid)
         qr = self._qr(images)
+        original = receipts.find_duplicate(conn, rid, qr) if qr else None
+        if original:  # the same fiscal receipt again: no need to pay for a reading
+            receipts.mark_duplicate(conn, rid, original, None, qr)
+            log.info("receipt %s: duplicate of %s (QR)", rid, original)
+            return
         try:
             categories = self.sheet.categories()
         except Exception:
@@ -91,6 +96,12 @@ class Worker:
         status = receipts.store_outcome(conn, rid, outcome, qr)
         if getattr(outcome, "reading", None) is not None:
             receipts.apply_history(conn, self.sheet, rid)
+        if status in ("ok", "check") and not receipts.get_row(conn, rid)["sheet_row"]:
+            original = receipts.find_duplicate(conn, rid)
+            if original:
+                receipts.mark_duplicate(conn, rid, original, status)
+                log.info("receipt %s: duplicate of %s", rid, original)
+                status = "duplicate"
         if status == "ok":
             receipts.sync_sheet(conn, self.sheet, rid, self.clock())
         log.info("receipt %s: %s", rid, status)

@@ -39,6 +39,21 @@
         <button class="btn btn-secondary btn-sm">Опитай пак</button>
       </form>
     </div>
+  {% elif r.status == 'duplicate' %}
+    <div class="notice notice-warn">
+      <p>Вече имаш тази бележка
+        {%- if original %} (<a href="/receipts/{{ original.id }}" class="font-medium underline">{% if original.date %}от {{ original.date|bgdate }}, {% endif %}#{{ original.id }}</a>){% else %} (оригиналът е изтрит){% endif %}.
+        Не е записана в таблицата.</p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <form method="post" action="/receipts/{{ r.id }}/delete">
+          <button class="btn btn-danger btn-sm">Изтрий</button>
+        </form>
+        {% if original %}<a href="/receipts/{{ original.id }}" class="btn btn-secondary btn-sm">Отвори оригинала</a>{% endif %}
+        <form method="post" action="/receipts/{{ r.id }}/not-duplicate">
+          <button class="btn btn-ghost btn-sm">Не е дубликат</button>
+        </form>
+      </div>
+    </div>
   {% elif r.status == 'ok' %}
     <p class="text-sm muted">
       {%- if r.sheet_row and r.sheet_written_at %}В таблицата, ред {{ r.sheet_row }}.
@@ -112,7 +127,7 @@
 </section>
 {% endif %}
 
-{% if r.source != 'manual' %}
+{% if r.source != 'manual' and r.status != 'duplicate' %}
 <section class="mt-8 grid gap-3" aria-label="Действия">
   {% if not busy and r.next_start_at is not none %}
   <form method="post" action="/receipts/{{ r.id }}/reread">

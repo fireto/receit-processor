@@ -152,7 +152,7 @@ def test_recent_list_shows_status_chips_and_stops_polling_when_idle(client, conn
     upload(client)
     upload(client)
     upload(client)
-    w = worker(sheet, FakeReader(Outcome(), Outcome(status="check"),
+    w = worker(sheet, FakeReader(Outcome(), Outcome(status="check", reading=Reading(total_cents=999)),
                                  Outcome(status="retake", reading=Reading(quality=["blurry"]))))
     for _ in range(3):
         w.process_next()
@@ -379,3 +379,24 @@ def test_static_files_are_versioned_and_immutable(client):
     resp = client.get(src)
     assert resp.status_code == 200
     assert "immutable" in resp.headers["cache-control"]
+
+
+def test_duplicate_page_links_the_original_and_can_be_dismissed(client, conn, sheet):
+    upload(client)
+    upload(client)
+    w = worker(sheet)
+    w.process_next()
+    w.process_next()
+    first, second = [r[0] for r in conn.execute("SELECT id FROM receipt ORDER BY id")]
+
+    html = body(client.get(f"/receipts/{second}"))
+    assert "Вече имаш тази бележка" in html
+    assert f'href="/receipts/{first}"' in html
+    assert f'action="/receipts/{second}/not-duplicate"' in html
+    assert "/reread" not in html and "/retake" not in html
+    assert "дубликат" in body(client.get("/"))
+
+    resp = client.post(f"/receipts/{second}/not-duplicate")
+    assert resp.status_code == 303 and resp.headers["location"] == f"/receipts/{second}"
+    assert conn.execute("SELECT status, sheet_row FROM receipt WHERE id = ?",
+                        (second,)).fetchone()[:] == ("ok", 3)

@@ -1,10 +1,14 @@
 """The receipt store: queue, reading results, edits and the Sheet row.
 
-Statuses: queued → reading → ok | check | retake | failed. A receipt is written to the
+Statuses: queued → reading → ok | check | retake | failed | duplicate. A receipt is written to the
 Sheet when it is `ok` (read and self-checked, or confirmed by hand); `sheet_written_at`
 NULL on an `ok` receipt means a write or an update is pending (the worker retries it).
 Every Sheet mutation runs under SHEET_LOCK: deleting a row shifts the rows below it, and
 the stored `sheet_row`s are shifted with it.
+
+A receipt scanned again is held as `duplicate` of the older one: matched by its fiscal QR
+code (fiscal device + receipt number) before reading, or by ЕИК + date + minute + total
+after it. "Не е дубликат" releases it to the status it would have had.
 """
 
 import json
@@ -21,7 +25,7 @@ from backend.config import DEFAULT_CATEGORY, SHEET_COLUMNS, ReceiptData
 log = logging.getLogger(__name__)
 
 SOFIA = ZoneInfo("Europe/Sofia")
-STATUSES = ("queued", "reading", "ok", "check", "retake", "failed")
+STATUSES = ("queued", "reading", "ok", "check", "retake", "failed", "duplicate")
 OUTCOME_STATUSES = ("ok", "check", "retake", "failed")
 ATTEMPT_OUTCOMES = ("ok", "check_failed", "quality", "error")
 MAX_PHOTOS = 3
@@ -78,15 +82,17 @@ def replace_photos(conn, photos_dir: Path, rid: int, photos: list,
 
 
 def _queue(conn, rid: int, start_at: int, now: datetime | None) -> None:
-    conn.execute("UPDATE receipt SET status = 'queued', start_at = ?, queued_at = ? "
-                 "WHERE id = ?", (start_at, iso(now or utcnow()), rid))
+    conn.execute("UPDATE receipt SET status = 'queued', start_at = ?, queued_at = ?, "
+                 "duplicate_of = NULL, duplicate_held_status = NULL WHERE id = ?",
+                 (start_at, iso(now or utcnow()), rid))
 
 
 def reread(conn, rid: int, now: datetime | None = None) -> bool:
     """Queue for the next model up the ladder; False when there is none."""
     r = conn.execute("SELECT next_start_at, status FROM receipt WHERE id = ?",
                      (rid,)).fetchone()
-    if r is None or r["next_start_at"] is None or r["status"] in ("queued", "reading"):
+    if r is None or r["next_start_at"] is None or \
+            r["status"] in ("queued", "reading", "duplicate"):
         return False
     with conn:
         _queue(conn, rid, r["next_start_at"], now)
@@ -228,6 +234,63 @@ def apply_history(conn, sheet, rid: int) -> None:
                      (method, category or DEFAULT_CATEGORY, rid))
 
 
+# --- duplicates --------------------------------------------------------------------------
+
+def find_duplicate(conn, rid: int, qr: dict | None = None) -> int | None:
+    """The older receipt this one repeats: same fiscal QR (`qr`, or the stored one), else
+    the same ЕИК, date, minute and total. None when dismissed or there is no match."""
+    r = get_row(conn, rid)
+    if r is None or r["duplicate_dismissed"]:
+        return None
+    qr = qr or (json.loads(r["qr_json"]) if r["qr_json"] else None)
+    if qr and qr.get("fp_number") and qr.get("receipt_number"):
+        hit = conn.execute(
+            "SELECT id FROM receipt WHERE id < ? AND status != 'duplicate' "
+            "AND json_extract(qr_json, '$.fp_number') = ? "
+            "AND json_extract(qr_json, '$.receipt_number') = ? ORDER BY id LIMIT 1",
+            (rid, str(qr["fp_number"]), str(qr["receipt_number"]))).fetchone()
+        if hit:
+            return hit[0]
+    if not (r["eik"] and r["date"] and r["time"] and r["total_cents"] is not None):
+        return None
+    hit = conn.execute(
+        "SELECT id FROM receipt WHERE id < ? AND status IN ('ok', 'check', 'retake') "
+        "AND eik = ? AND date = ? AND total_cents = ? AND substr(time, 1, 5) = ? "
+        "ORDER BY id LIMIT 1",
+        (rid, r["eik"], r["date"], r["total_cents"], r["time"][:5])).fetchone()
+    return hit[0] if hit else None
+
+
+def mark_duplicate(conn, rid: int, of: int, held_status: str | None,
+                   qr: dict | None = None) -> None:
+    with conn:
+        conn.execute(
+            "UPDATE receipt SET status = 'duplicate', duplicate_of = ?, "
+            "duplicate_held_status = ?, qr_json = coalesce(?, qr_json) WHERE id = ?",
+            (of, held_status, json.dumps(qr, ensure_ascii=False) if qr else None, rid))
+
+
+def dismiss_duplicate(conn, sheet, rid: int, now: datetime | None = None) -> str | None:
+    """"Не е дубликат": back to the status it was held from (an unread one is queued for
+    reading); never flagged again. Returns the new status, None if not a duplicate."""
+    r = get_row(conn, rid)
+    if r is None or r["status"] != "duplicate":
+        return None
+    held = r["duplicate_held_status"]
+    with conn:
+        conn.execute("UPDATE receipt SET duplicate_dismissed = 1 WHERE id = ?", (rid,))
+        if held is None:
+            _queue(conn, rid, 0, now)
+        else:
+            conn.execute(
+                "UPDATE receipt SET status = ?, duplicate_of = NULL, "
+                "duplicate_held_status = NULL, sheet_written_at = NULL WHERE id = ?",
+                (held, rid))
+    if held == "ok":
+        sync_sheet(conn, sheet, rid, now)
+    return held or "queued"
+
+
 # --- spend -----------------------------------------------------------------------------
 
 def spent_this_month_usd(conn, now: datetime | None = None) -> float:
@@ -259,6 +322,7 @@ def get(conn, rid: int) -> dict | None:
         "check": self_check(r["total_cents"], lines, discounts) if lines else None,
         "quality": json.loads(r["quality_json"]) if r["quality_json"] else [],
         "qr": json.loads(r["qr_json"]) if r["qr_json"] else None,
+        "original": get_row(conn, r["duplicate_of"]) if r["duplicate_of"] else None,
     }
 
 
