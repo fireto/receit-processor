@@ -70,7 +70,8 @@ first, then in code.
   estimate reaches `MONTHLY_CAP_USD` (default 2) no further escalation happens (→ `check`).
   The provider consoles carry the same hard cap ($2 per provider).
 - QR decoding, card-digits → payment method and ЕИК → category from history are kept from
-  the PoC.
+  the PoC. Cards whose digits are not in their method's name (food vouchers) are mapped
+  by `CARD_METHODS` in the host `.env`.
 - **Settled in code** (2026-10-14): amounts are integer cents in the schema itself;
   `payment` is `cash`/`card`/`unknown` (→ None); `category` is an enum of the passed
   categories (fallback Разни); line discounts are stored positive, receipt discounts are

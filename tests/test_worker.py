@@ -245,6 +245,26 @@ def test_unknown_card_leaves_the_payment_method_empty(env):
     assert receipt(conn, rid)["payment_method"] is None
 
 
+def test_card_methods_map_a_card_to_a_method_without_its_digits(env, monkeypatch):
+    # CARD_METHODS (host .env): food vouchers *2889 are "Ваучери за храна" in the Sheet
+    monkeypatch.setenv("CARD_METHODS", "2889=Ваучери за храна, 6832 = Revolut")
+    conn, sheet, photos_dir, worker = env
+    a, b = new_receipt(conn, photos_dir), new_receipt(conn, photos_dir)
+    w = worker(FakeReader(Outcome(reading=Reading(card_last4="2889")),
+                          Outcome(reading=Reading(card_last4="6832", total_cents=99))))
+    w.process_next(), w.process_next()
+    assert receipt(conn, a)["payment_method"] == "Ваучери за храна"
+    assert receipt(conn, b)["payment_method"] == "Revolut"
+
+
+def test_card_methods_naming_an_unknown_method_is_ignored(env, monkeypatch):
+    monkeypatch.setenv("CARD_METHODS", "9999=Няма такъв")
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    worker(FakeReader(Outcome(reading=Reading(card_last4="9999")))).process_next()
+    assert receipt(conn, rid)["payment_method"] is None
+
+
 def test_eik_history_replaces_the_fallback_category(env):
     conn, sheet, photos_dir, worker = env
     sheet.rows += [["01.09.2026", "Аптека", "", "5,00", "", "", "", "", "", "222"],

@@ -90,7 +90,8 @@ class FakeSheet:
     """An in-memory Sheet with the GoogleSheet adapter's interface. Row 1 is the header."""
 
     def __init__(self, categories=("Храна", "Козметика", "Аптека", "Гориво", "Разни"),
-                 payment_methods=("Cash", "FIB 0889", "Revolut", "Bulbank 4416"),
+                 payment_methods=("Cash", "FIB 0889", "Revolut", "Bulbank 4416",
+                                  "Ваучери за храна"),
                  rows=()):
         self._categories = list(categories)
         self._payment_methods = list(payment_methods)

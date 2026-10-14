@@ -13,6 +13,7 @@ after it. "Не е дубликат" releases it to the status it would have had
 
 import json
 import logging
+import os
 import sqlite3
 import threading
 from datetime import date, datetime, timezone
@@ -210,6 +211,13 @@ def _store_reading(conn, rid: int, r) -> None:
         [(rid, i, d.name, d.cents) for i, d in enumerate(discounts, start=1)])
 
 
+def card_methods() -> dict[str, str]:
+    """CARD_METHODS (host .env, not in git): `2889=Ваучери за храна,6832=Revolut` — cards
+    whose digits are not part of their ПлатежноСредство name."""
+    pairs = (item.partition("=") for item in os.environ.get("CARD_METHODS", "").split(","))
+    return {k.strip(): v.strip() for k, sep, v in pairs if sep and k.strip() and v.strip()}
+
+
 def apply_history(conn, sheet, rid: int) -> None:
     """Card digits → payment method; ЕИК → the category used before (when the model fell
     back to the default one). Ported from the PoC; a Sheet error only skips it."""
@@ -218,7 +226,9 @@ def apply_history(conn, sheet, rid: int) -> None:
     try:
         methods = sheet.payment_methods()
         if r["card_last4"]:
-            method = next((m for m in methods if r["card_last4"] in m), None)
+            mapped = card_methods().get(r["card_last4"])
+            method = mapped if mapped in methods else \
+                next((m for m in methods if r["card_last4"] in m), None)
         elif r["payment"] == "cash":
             method = next((m for m in methods
                            if any(w in m.lower() for w in CASH_WORDS)), None)
