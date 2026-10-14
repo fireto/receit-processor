@@ -75,8 +75,9 @@ first, then in code.
 - **ЕИК**: a wrong check digit (9-digit ЕИК, 13-digit branch code) means a misread, so an
   `ok` receipt becomes `check` with the ЕИК highlighted (it is editable on the receipt
   page). A valid ЕИК is looked up once in **VIES** (EU VAT check, free, no key), and the
-  answer is cached in the `company` table. The registered name then replaces the name as
-  read. VIES only knows VAT-registered companies: "not found" is cached and asked again
+  answer is cached in the `company` table. The store name stays as read on the receipt,
+  because it names the venue (one store of a chain); the registered company is its reference
+  through the ЕИК and shows under it on the receipt page. VIES only knows VAT-registered companies: "not found" is cached and asked again
   after 30 days, and a failed request is not cached. Търговски регистър has no public API
   (paid ones: docs/TODO.md).
 - **Settled in code** (2026-10-14): amounts are integer cents in the schema itself;

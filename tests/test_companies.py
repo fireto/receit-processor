@@ -108,11 +108,15 @@ def env(tmp_path):
     c.close()
 
 
-def test_the_registered_name_replaces_the_name_as_read(env):
+def test_the_venue_name_stays_and_the_company_is_looked_up(env):
+    # the receipt names the venue (one store of a chain); the registered company is a
+    # reference through the ЕИК
     conn, sheet, vies, run = env
-    rid = run(Reading(eik=LIDL, store_name="Лидл България ЕООД енд КО. КД."))
+    rid = run(Reading(eik=LIDL, store_name="Лидл Варна 0204"))
     r = receipt(conn, rid)
-    assert r["status"] == "ok" and r["store_name"] == "ЛИДЛ БЪЛГАРИЯ ЕООД ЕНД КО - КД"
+    assert r["status"] == "ok" and r["store_name"] == "Лидл Варна 0204"
+    assert vies.calls == [LIDL]
+    assert receipts.get(conn, rid)["company"].name == "ЛИДЛ БЪЛГАРИЯ ЕООД ЕНД КО - КД"
 
 
 def test_an_unknown_company_keeps_the_name_as_read(env):
@@ -120,6 +124,7 @@ def test_an_unknown_company_keeps_the_name_as_read(env):
     rid = run(Reading(eik="131129282", store_name="Пицария Его"))
     assert receipt(conn, rid)["store_name"] == "Пицария Его"
     assert receipt(conn, rid)["status"] == "ok"
+    assert receipts.get(conn, rid)["company"] is None
 
 
 def test_a_misread_eik_sends_the_receipt_to_check(env):
@@ -147,5 +152,6 @@ def test_correcting_the_eik_looks_up_the_company(env):
                            category=r["category"], payment_method=r["payment_method"],
                            notes=r["notes"], eik=LIDL, company_lookup=vies, now=NOW)
     r = receipt(conn, rid)
-    assert r["eik"] == LIDL and r["store_name"] == "ЛИДЛ БЪЛГАРИЯ ЕООД ЕНД КО - КД"
+    assert r["eik"] == LIDL and r["store_name"] == "Лидл"
+    assert receipts.get(conn, rid)["company"].name == "ЛИДЛ БЪЛГАРИЯ ЕООД ЕНД КО - КД"
     assert r["status"] == "check"  # still waits for "Потвърди"

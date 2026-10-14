@@ -9,6 +9,7 @@
 <div class="mt-2 flex items-start justify-between gap-3">
   <div class="min-w-0">
     <h1 class="text-xl font-semibold leading-tight">{{ r.store_name or ('Ръчен разход' if r.source == 'manual' else 'Бележка') }}</h1>
+    {% if company and company.name != r.store_name %}<p class="mt-0.5 text-sm">{{ company.name }}</p>{% endif %}
     <p class="mt-1 text-sm muted">
       {%- if r.store_address %}{{ r.store_address }} · {% endif %}{% if r.eik %}ЕИК {{ r.eik }} · {% endif %}качена {{ r.created_at|local }}
     </p>

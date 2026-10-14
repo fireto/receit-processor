@@ -305,8 +305,9 @@ def dismiss_duplicate(conn, sheet, rid: int, now: datetime | None = None) -> str
 # --- the company ------------------------------------------------------------------------
 
 def apply_company(conn, rid: int, fetch, status: str, now: datetime | None = None) -> str:
-    """A misread ЕИК (wrong check digit) holds an `ok` receipt as `check`; a known company's
-    registered name replaces the name as read. Returns the status."""
+    """A misread ЕИК (wrong check digit) holds an `ok` receipt as `check`; a valid one is
+    looked up (cached in `company`). The store name stays as read: it names the venue, the
+    company is its reference through the ЕИК. Returns the status."""
     r = get_row(conn, rid)
     eik = r["eik"]
     if not eik:
@@ -318,10 +319,7 @@ def apply_company(conn, rid: int, fetch, status: str, now: datetime | None = Non
             log.info("receipt %s: ЕИК %s fails its check digit", rid, eik)
             return "check"
         return status
-    company = companies.lookup(conn, eik, fetch=fetch, now=now)
-    if company and company.name != r["store_name"]:
-        with conn:
-            conn.execute("UPDATE receipt SET store_name = ? WHERE id = ?", (company.name, rid))
+    companies.lookup(conn, eik, fetch=fetch, now=now)
     return status
 
 
@@ -357,6 +355,7 @@ def get(conn, rid: int) -> dict | None:
         "quality": json.loads(r["quality_json"]) if r["quality_json"] else [],
         "qr": json.loads(r["qr_json"]) if r["qr_json"] else None,
         "original": get_row(conn, r["duplicate_of"]) if r["duplicate_of"] else None,
+        "company": companies.lookup(conn, r["eik"], fetch=None),
     }
 
 
@@ -400,17 +399,13 @@ def update_header(conn, sheet, rid: int, *, date: str | None, total_cents: int |
                   now: datetime | None = None) -> bool:
     """Save the editable fields; a written receipt's row is updated. Returns whether the
     Sheet is in sync (False: the update is pending and will be retried). A changed ЕИК is
-    looked up and its registered name replaces the store name."""
+    looked up."""
     if eik is not _UNCHANGED:
         eik = "".join(ch for ch in (eik or "") if ch.isdigit()) or None
         if eik != get_row(conn, rid)["eik"]:
             with conn:
                 conn.execute("UPDATE receipt SET eik = ? WHERE id = ?", (eik, rid))
-            company = companies.lookup(conn, eik, fetch=company_lookup, now=now)
-            if company:
-                with conn:
-                    conn.execute("UPDATE receipt SET store_name = ? WHERE id = ?",
-                                 (company.name, rid))
+            companies.lookup(conn, eik, fetch=company_lookup, now=now)
     with conn:
         conn.execute(
             "UPDATE receipt SET date = ?, total_cents = ?, category = ?, payment_method = ?, "

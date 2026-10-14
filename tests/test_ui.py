@@ -421,6 +421,18 @@ def test_misread_eik_is_explained_and_can_be_corrected(client, conn, sheet):
     assert "изглежда прочетен грешно" not in body(client.get(f"/receipts/{rid}"))
 
 
+def test_receipt_page_shows_the_registered_company_under_the_venue(client, conn, sheet):
+    conn.execute("INSERT INTO company VALUES ('131071587', 'ЛИДЛ БЪЛГАРИЯ ЕООД ЕНД КО - КД', "
+                 "'гр.СОФИЯ', 'vies', 1, '2026-10-14T10:00:00+00:00')")
+    conn.commit()
+    upload(client)
+    worker(sheet, FakeReader(Outcome(reading=Reading(eik="131071587",
+                                                     store_name="Лидл Варна 0204")))).process_next()
+    rid = conn.execute("SELECT id FROM receipt").fetchone()[0]
+    html = body(client.get(f"/receipts/{rid}"))
+    assert "Лидл Варна 0204" in html and "ЛИДЛ БЪЛГАРИЯ ЕООД ЕНД КО - КД" in html
+
+
 def _add(conn, n, status="ok"):
     for i in range(n):
         conn.execute("INSERT INTO receipt (created_at, status, source, store_name, total_cents) "
