@@ -135,7 +135,7 @@ class TestSheetRow:
         assert len(row) == 10
         assert row[0] == "15.02.2026"  # date
         assert row[1] == "Храна"  # category
-        assert "," in row[2]  # BGN with comma decimal
+        assert row[2] == ""  # Цена лв left empty for new rows (DESIGN.md)
         assert "," in row[3]  # EUR with comma decimal
         assert row[4] == ""  # GGBG empty
         assert row[5] == "Revolut"  # payment
