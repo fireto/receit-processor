@@ -1,7 +1,7 @@
-"""Stand-ins for the model reader and the Google Sheet.
+"""Stand-ins for the model reader, the Google Sheet and offers.
 
 Used by the tests and by local development runs (RECEIPTS_READER=fake,
-RECEIPTS_SHEET=fake): nothing here calls a model or the real Sheet. The reading types
+RECEIPTS_SHEET=fake): nothing here calls a model, the real Sheet or offers. The reading types
 mirror the interface of `backend.reading` (duck-typed: the worker reads attributes).
 """
 
@@ -137,3 +137,23 @@ class FakeSheet:
     def row(self, row: int) -> dict[str, str]:
         self._call("row", row)
         return dict(zip(SHEET_COLUMNS, self.rows[row - 1])) if row <= len(self.rows) else {}
+
+
+class FakeOffers:
+    """offers' receipts API as `backend.offers_outbox.OffersClient` sends to it. Answers
+    with the given responses in order (the last one repeats): a status, (status, body) or
+    an exception to raise. `on_send` runs before answering (for races)."""
+
+    def __init__(self, *responses, on_send=None):
+        self.responses = list(responses) or [200]
+        self.on_send = on_send
+        self.calls: list[tuple] = []
+
+    def send(self, method: str, rid: int, body: dict | None) -> tuple[int, str]:
+        self.calls.append((method, rid, body))
+        if self.on_send:
+            self.on_send(method, rid, body)
+        r = self.responses.pop(0) if len(self.responses) > 1 else self.responses[0]
+        if isinstance(r, Exception):
+            raise r
+        return r if isinstance(r, tuple) else (r, "")
