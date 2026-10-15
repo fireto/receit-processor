@@ -120,10 +120,14 @@ count. "< 30 s" is judged on the median. `--dry-run` prints the plan and an uppe
 
 ## Data model (SQLite `data/receipts.db`, WAL)
 
-- `receipt`: id, created_at, status, source (`camera`/`gallery`/`manual`), header fields,
+- `receipt`: id (AUTOINCREMENT since v4: offers keys receipts on it, so a deleted
+  receipt's id never comes back), created_at, status, source (`camera`/`gallery`/`manual`), header fields,
   `category`, `payment_method`, `notes`, `qr_json`, `self_check_json`, `quality_json`,
   `sheet_row` (NULL until written), `sheet_written_at`, `confirmed_at`, `duplicate_of`,
-  `duplicate_held_status`, `duplicate_dismissed`.
+  `duplicate_held_status`, `duplicate_dismissed`, `sent_to_offers_at`.
+- `offers_outbox`: op_id, receipt_id (unique, no foreign key: a delete outlives its
+  receipt), op (`put`/`delete`), queued_at, attempts, next_try_at (NULL: not retried),
+  last_error.
 - `receipt_photo`: receipt_id, seq, path, width, height.
 - `receipt_line`: receipt_id, seq, name, qty, unit, unit_price_cents, total_cents,
   discount_cents, vat_group.
@@ -168,6 +172,13 @@ purchases, paid prices, reports. The contract lives in offers' DESIGN.md ("Recei
   state is sent, not a history); deleting one that was sent queues a `delete`. A new
   operation replaces a pending one for the same receipt. `sent_to_offers_at` on the receipt
   records the last successful `put`.
+- Settled in code (2026-10-15): a `put` is built when it is sent and only while the
+  receipt is still `ok`; one that left `ok` (a re-read or re-take under way, or one that
+  ended in `check`) sends nothing and offers keeps the last version it got, until the
+  receipt is `ok` again. Deleting a receipt never sent drops its pending `put`; a first
+  `put` that succeeds after its receipt was deleted queues a `delete`. Manual entries
+  (no receipt, no lines) are never sent. `photo_url`'s base is `RECEIPTS_PUBLIC_URL`
+  (default `https://rec.fireto.net`).
 - **Sending**: the worker thread drains the outbox between readings. `PUT
   $OFFERS_URL/api/receipts/{id}` with the whole receipt (header, lines, discounts,
   `photo_url` = `https://rec.fireto.net/receipts/{id}`) and `Authorization: Bearer

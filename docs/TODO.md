@@ -67,10 +67,6 @@ Deferred and upcoming work. Delete an entry when it lands.
 - "Последни" shows no photo thumbnails (the stored photos are ~300 KB each); add small
   thumbnails if it is hard to tell receipts apart.
 
-- Receipt ids are reused: `receipt.id` is a plain INTEGER PRIMARY KEY, so deleting the
-  newest receipts hands their id to the next upload (seen 2026-10-14: a new scan became #2
-  again). Harmless now. Before the offers hand-off keys anything on the id, move to
-  AUTOINCREMENT or a stable uid.
 - A card not in ПлатежноСредство leaves Плащане empty (2026-10-14: card 0367). The user
   then typed "Bulbank 4416" into row 1629 by hand, and an edit in the app would overwrite
   it with "", because Плащане is an app column. Either keep a hand-set Плащане when the
@@ -101,8 +97,19 @@ Deferred and upcoming work. Delete an entry when it lands.
 ## Next
 - Model comparison → choose the ladder and the backup provider (cheapest reliable model
   first); record the result in DESIGN.md.
-- Hand-off to offers: designed 2026-10-15 (DESIGN.md "Hand-off to offers"), being built
-  (outbox, then backfill).
+- Hand-off to offers: built 2026-10-15 on branch `offers-outbox` (schema v4: outbox,
+  `sent_to_offers_at`, AUTOINCREMENT ids; the enqueue-all CLI), not merged or deployed.
+  To go live: offers' receipts API deployed with `OFFERS_RECEIPTS_TOKEN`; on the host
+  `.env`, `OFFERS_URL=http://10.20.10.11:8090` and `OFFERS_TOKEN=<the same token>`;
+  rebuild; then `docker exec -u 1000:1000 receit-processor python -m backend.offers_outbox
+  enqueue-all` and watch `/healthz` (`offers_pending`). Open points:
+  - `/healthz` turns 503 once an operation waits 6 h, also when `OFFERS_URL` is unset:
+    deploy v4 with the env set (or offers live) within 6 h of the first ok receipt.
+  - The outbox is visible only in `/healthz` and the logs; a 4xx (e.g. offers refusing a
+    receipt) waits there until the receipt is edited. A small "Изпратена в offers" /
+    error note on the receipt page if that ever happens.
+  - The reader thread sends the due operations between readings; with offers hanging,
+    each costs up to 10 s (timeout) before the next reading.
 - Restore drill with real data (photos) once receipts exist — tracked in the lab's
   docs/TODO.md.
 
