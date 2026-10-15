@@ -24,7 +24,8 @@ def test_healthy(path, tmp_path):
     ok, details = health.check(path, NOW, reader_alive=True, photos_dir=tmp_path)
     assert ok
     assert details == {"reader": "running", "oldest_queued_minutes": None,
-                       "database": "writable", "photos": "writable", "sheet_pending": 0}
+                       "database": "writable", "photos": "writable", "sheet_pending": 0,
+                       "offers_pending": 0, "offers_oldest_hours": None}
 
 
 def test_dead_reader_is_unhealthy(path, tmp_path):
@@ -42,6 +43,20 @@ def test_receipt_queued_over_ten_minutes_is_unhealthy(path, tmp_path):
     ok, details = health.check(path, NOW + timedelta(minutes=2), reader_alive=True,
                                photos_dir=tmp_path)
     assert not ok and details["oldest_queued_minutes"] == 11
+
+
+def test_an_offers_operation_pending_over_six_hours_is_unhealthy(path, tmp_path):
+    conn = db.connect(path)
+    with conn:
+        conn.execute("INSERT INTO offers_outbox (receipt_id, op, queued_at, next_try_at, "
+                     "last_error) VALUES (3, 'put', ?, NULL, 'HTTP 422')",
+                     (receipts.iso(NOW - timedelta(hours=5, minutes=59)),))
+    ok, details = health.check(path, NOW, reader_alive=True, photos_dir=tmp_path)
+    assert ok and (details["offers_pending"], details["offers_oldest_hours"]) == (1, 5)
+
+    ok, details = health.check(path, NOW + timedelta(minutes=2), reader_alive=True,
+                               photos_dir=tmp_path)
+    assert not ok and details["offers_oldest_hours"] == 6
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file permissions")

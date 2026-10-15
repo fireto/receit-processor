@@ -75,7 +75,8 @@ def livez():
 
 @app.get("/healthz")
 def healthz(request: Request):
-    """The reader runs, nothing waits over 10 min, data/ is writable. Probed by Gatus."""
+    """The reader runs, no reading waits over 10 min, no offers operation over 6 h, data/ is
+    writable. Probed by Gatus."""
     w = getattr(request.app.state, "worker", None)
     ok, details = health.check(config.DB_PATH, receipts.utcnow(),
                                reader_alive=bool(w and w.alive()),

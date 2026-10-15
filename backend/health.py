@@ -1,4 +1,5 @@
-"""/healthz: the reader thread runs, nothing waits too long, the data dir is writable."""
+"""/healthz: the reader thread runs, nothing waits too long (a reading 10 min, an offers
+operation 6 h), the data dir is writable."""
 
 import os
 from datetime import datetime, timedelta
@@ -7,13 +8,15 @@ from pathlib import Path
 from backend import db
 
 MAX_QUEUED = timedelta(minutes=10)
+MAX_OFFERS_PENDING = timedelta(hours=6)
 
 
 def check(db_path: Path | str, now: datetime, *, reader_alive: bool,
           photos_dir: Path) -> tuple[bool, dict]:
     details: dict = {"reader": "running" if reader_alive else "dead",
                      "oldest_queued_minutes": None, "database": "writable",
-                     "photos": "writable", "sheet_pending": None}
+                     "photos": "writable", "sheet_pending": None,
+                     "offers_pending": None, "offers_oldest_hours": None}
     ok = reader_alive
     try:
         conn = db.connect(db_path)
@@ -28,6 +31,14 @@ def check(db_path: Path | str, now: datetime, *, reader_alive: bool,
             details["sheet_pending"] = conn.execute(
                 "SELECT count(*) FROM receipt WHERE status = 'ok' "
                 "AND sheet_written_at IS NULL").fetchone()[0]
+            # offers down, refusing a receipt (4xx) or OFFERS_URL unset
+            pending, oldest = conn.execute(
+                "SELECT count(*), min(queued_at) FROM offers_outbox").fetchone()
+            details["offers_pending"] = pending
+            if oldest:
+                age = now - datetime.fromisoformat(oldest)
+                details["offers_oldest_hours"] = int(age.total_seconds() // 3600)
+                ok = ok and age <= MAX_OFFERS_PENDING
             # a real write: rewrite the header's user_version with its own value
             version = conn.execute("PRAGMA user_version").fetchone()[0]
             conn.execute("BEGIN IMMEDIATE")
