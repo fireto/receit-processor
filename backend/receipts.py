@@ -4,7 +4,8 @@ Statuses: queued → reading → ok | check | retake | failed | duplicate. A rec
 Sheet when it is `ok` (read and self-checked, or confirmed by hand); `sheet_written_at`
 NULL on an `ok` receipt means a write or an update is pending (the worker retries it).
 Every Sheet mutation runs under SHEET_LOCK: deleting a row shifts the rows below it, and
-the stored `sheet_row`s are shifted with it.
+the stored `sheet_row`s are shifted with it. The same changes queue the receipt for
+offers (backend/offers_outbox.py).
 
 A receipt scanned again is held as `duplicate` of the older one: matched by its fiscal QR
 code (fiscal device + receipt number) before reading, or by ЕИК + date + minute + total
@@ -20,7 +21,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from backend import companies
+from backend import companies, offers_outbox
 from backend import photos as photo_store
 from backend.config import DEFAULT_CATEGORY, SHEET_COLUMNS, ReceiptData
 
@@ -297,6 +298,7 @@ def dismiss_duplicate(conn, sheet, rid: int, now: datetime | None = None) -> str
                 "UPDATE receipt SET status = ?, duplicate_of = NULL, "
                 "duplicate_held_status = NULL, sheet_written_at = NULL WHERE id = ?",
                 (held, rid))
+            offers_outbox.queue_put(conn, rid, now or utcnow())
     if held == "ok":
         sync_sheet(conn, sheet, rid, now)
     return held or "queued"
@@ -413,6 +415,7 @@ def update_header(conn, sheet, rid: int, *, date: str | None, total_cents: int |
             "ELSE sheet_written_at END WHERE id = ?",
             (date or None, total_cents, category or None, payment_method or None,
              notes or None, rid))
+        offers_outbox.queue_put(conn, rid, now or utcnow())  # queued only when ok
     return sync_sheet(conn, sheet, rid, now)
 
 
@@ -422,6 +425,7 @@ def confirm(conn, sheet, rid: int, now: datetime | None = None) -> bool:
         changed = conn.execute(
             "UPDATE receipt SET status = 'ok', confirmed_at = ?, sheet_written_at = NULL "
             "WHERE id = ? AND status = 'check'", (iso(now or utcnow()), rid)).rowcount
+        offers_outbox.queue_put(conn, rid, now or utcnow())
     return bool(changed) and sync_sheet(conn, sheet, rid, now)
 
 
@@ -477,10 +481,12 @@ def sync_sheet(conn, sheet, rid: int, now: datetime | None = None) -> bool:
         return True
 
 
-def delete(conn, sheet, photos_dir: Path, rid: int) -> str | None:
+def delete(conn, sheet, photos_dir: Path, rid: int,
+           now: datetime | None = None) -> str | None:
     """Delete the receipt, its photos and its Sheet row. A row that no longer shows what
     the app wrote (edited by hand, or rows moved) is left alone: returns a warning.
-    Raises SheetUnavailable (and deletes nothing) when the Sheet cannot be reached."""
+    Raises SheetUnavailable (and deletes nothing) when the Sheet cannot be reached.
+    offers is told to forget it, if it ever got it."""
     warning = None
     with SHEET_LOCK:
         r = get_row(conn, rid)
@@ -506,6 +512,7 @@ def delete(conn, sheet, photos_dir: Path, rid: int) -> str | None:
             if row:
                 conn.execute("UPDATE receipt SET sheet_row = sheet_row - 1 WHERE sheet_row > ?",
                              (row,))
+            offers_outbox.queue_delete(conn, rid, now or utcnow())
             conn.execute("DELETE FROM receipt WHERE id = ?", (rid,))
     photo_store.remove(photos_dir, rid)
     return warning

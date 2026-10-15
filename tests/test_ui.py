@@ -465,3 +465,14 @@ def test_all_receipts_filters_by_status(client, conn):
     assert 'href="/receipts?status=check"' in html  # the chip, marked current
     assert "провери (2)" in html
     assert body(client.get("/receipts?status=bogus")).count("Магазин") == 5
+
+
+def test_the_worker_sends_to_offers_only_when_offers_url_is_set(conn, monkeypatch):
+    from backend import main
+    monkeypatch.setenv("RECEIPTS_READER", "fake")
+    monkeypatch.delenv("OFFERS_URL", raising=False)
+    assert main.make_worker(FakeSheet()).offers is None
+    monkeypatch.setenv("OFFERS_URL", "http://10.20.10.11:8090")
+    monkeypatch.setenv("OFFERS_TOKEN", "tok")
+    offers = main.make_worker(FakeSheet()).offers
+    assert (offers.url, offers.token) == ("http://10.20.10.11:8090", "tok")

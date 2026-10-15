@@ -3,7 +3,8 @@
 It reads queued receipts one at a time, oldest first, with the reader function injected
 at construction (production: `backend.reading.read_receipt`, imported lazily so the app
 starts without the providers' SDKs loaded). Every minute it also retries pending Sheet
-writes. Nothing a reading does can stop the thread; /healthz reports a dead one.
+writes, and between readings it sends the due operations of the offers outbox (`offers`:
+the client, None when OFFERS_URL is unset). Nothing a reading does can stop the thread; /healthz reports a dead one.
 """
 
 import logging
@@ -14,7 +15,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from backend import db, receipts
+from backend import db, offers_outbox, receipts
 
 log = logging.getLogger(__name__)
 
@@ -42,11 +43,12 @@ class Worker:
     def __init__(self, db_path: Path | str, photos_dir: Path, sheet,
                  read: Callable = read_receipt, decode_qr: Callable = decode_qr,
                  clock: Callable[[], datetime] = receipts.utcnow, idle_wait: float = 2.0,
-                 company_lookup: Callable | None = None):
+                 company_lookup: Callable | None = None, offers=None):
         self.db_path, self.photos_dir, self.sheet = db_path, Path(photos_dir), sheet
         self.read, self.decode_qr, self.clock = read, decode_qr, clock
         self.idle_wait = idle_wait
         self.company_lookup = company_lookup
+        self.offers = offers
         self._stop = threading.Event()
         self._wake = threading.Event()
         self.thread: threading.Thread | None = None
@@ -107,6 +109,8 @@ class Worker:
                 status = "duplicate"
         if status == "ok":
             receipts.sync_sheet(conn, self.sheet, rid, self.clock())
+            with conn:
+                offers_outbox.queue_put(conn, rid, self.clock())
         log.info("receipt %s: %s", rid, status)
 
     def _qr(self, images: list[bytes]) -> dict | None:
@@ -125,6 +129,15 @@ class Worker:
         try:
             for rid in receipts.pending_sheet_ids(conn):
                 receipts.sync_sheet(conn, self.sheet, rid, self.clock())
+        finally:
+            conn.close()
+
+    def send_to_offers(self) -> None:
+        if self.offers is None:
+            return
+        conn = db.connect(self.db_path)
+        try:
+            offers_outbox.drain(conn, self.offers, self.clock())
         finally:
             conn.close()
 
@@ -152,6 +165,7 @@ class Worker:
             worked = False
             try:
                 worked = self.process_next()
+                self.send_to_offers()
                 if time.monotonic() - self._last_sync >= SYNC_EVERY:
                     self._last_sync = time.monotonic()
                     self.sync_pending()

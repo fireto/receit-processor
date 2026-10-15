@@ -9,7 +9,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend import companies, config, db, health, receipts, sheet_sync, ui, worker
+from backend import (companies, config, db, health, offers_outbox, receipts, sheet_sync,
+                     ui, worker)
 
 load_dotenv()
 
@@ -20,13 +21,16 @@ def make_worker(sheet) -> worker.Worker | None:
     mode = worker.mode()
     if mode == "0":
         return None
+    offers = offers_outbox.client_from_env()  # None: OFFERS_URL unset, nothing is sent
+    if offers is None:
+        log.warning("OFFERS_URL unset: receipts are queued for offers but not sent")
     if mode == "fake":  # local development: no model is called
         from backend import fakes
         log.warning("RECEIPTS_READER=fake: canned readings, no model calls")
         return worker.Worker(config.DB_PATH, config.PHOTOS_DIR, sheet, read=fakes.dev_read,
-                             decode_qr=fakes.dev_decode_qr)
+                             decode_qr=fakes.dev_decode_qr, offers=offers)
     return worker.Worker(config.DB_PATH, config.PHOTOS_DIR, sheet,
-                         company_lookup=companies.vies_fetch)
+                         company_lookup=companies.vies_fetch, offers=offers)
 
 
 @asynccontextmanager

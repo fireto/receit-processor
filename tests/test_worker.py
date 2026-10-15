@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import pytest
 
 from backend import db, receipts
-from backend.fakes import Attempt, Discount, FakeSheet, Line, Outcome, Reading
+from backend.fakes import Attempt, Discount, FakeOffers, FakeSheet, Line, Outcome, Reading
 from backend.worker import Worker
 from tests.helpers import FakeReader, photo
 
@@ -399,3 +399,129 @@ def test_the_thread_processes_the_queue_and_stops(env):
     finally:
         w.stop()
     assert not w.alive()
+
+
+# --- the hand-off to offers -----------------------------------------------------------------
+
+def outbox_op(conn, rid):
+    r = conn.execute("SELECT op FROM offers_outbox WHERE receipt_id = ?", (rid,)).fetchone()
+    return r and r["op"]
+
+
+def test_a_reading_ending_ok_queues_a_put(env):
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    worker(FakeReader()).process_next()
+    assert outbox_op(conn, rid) == "put"
+
+
+@pytest.mark.parametrize("status", ["check", "retake", "failed"])
+def test_a_reading_not_ending_ok_queues_nothing(env, status):
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    worker(FakeReader(Outcome(status=status))).process_next()
+    assert outbox_op(conn, rid) is None
+
+
+def test_a_misread_eik_holds_the_receipt_back_from_offers(env):
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    worker(FakeReader(Outcome(reading=Reading(eik="131129283")))).process_next()
+    assert receipt(conn, rid)["status"] == "check" and outbox_op(conn, rid) is None
+
+
+def test_confirming_queues_a_put(env):
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    worker(FakeReader(Outcome(status="check"))).process_next()
+    receipts.confirm(conn, sheet, rid, now=NOW)
+    assert outbox_op(conn, rid) == "put"
+
+
+def test_editing_an_ok_receipt_queues_a_put_but_not_a_check_one(env):
+    conn, sheet, photos_dir, worker = env
+    a, b = new_receipt(conn, photos_dir), new_receipt(conn, photos_dir)
+    worker(FakeReader(Outcome(), Outcome(status="check"))).process_next()
+    worker(FakeReader(Outcome(status="check"))).process_next()
+    conn.execute("DELETE FROM offers_outbox")
+    conn.commit()
+    for rid in (a, b):
+        receipts.update_header(conn, sheet, rid, date="2026-10-13", total_cents=999,
+                               category="Аптека", payment_method="", notes="", now=NOW)
+    assert (outbox_op(conn, a), outbox_op(conn, b)) == ("put", None)
+
+
+def test_a_reread_ending_in_check_sends_nothing_new(env):
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    w = worker(FakeReader(Outcome(), Outcome(status="check")))
+    w.process_next()
+    receipts.reread(conn, rid, now=NOW)
+    w.process_next()
+    offers = FakeOffers()
+    w.offers = offers
+    w.send_to_offers()
+    assert offers.calls == []  # the put queued by the first reading is dropped
+
+
+def test_deleting_a_sent_receipt_queues_a_delete(env):
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    w = worker(FakeReader())
+    w.process_next()
+    w.offers = FakeOffers()
+    w.send_to_offers()
+    assert receipt(conn, rid)["sent_to_offers_at"] is not None
+
+    receipts.delete(conn, sheet, photos_dir, rid, now=NOW)
+    assert outbox_op(conn, rid) == "delete"
+    w.send_to_offers()
+    assert w.offers.calls[-1] == ("DELETE", rid, None)
+    assert outbox_op(conn, rid) is None
+
+
+def test_deleting_a_never_sent_receipt_sends_nothing(env):
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    worker(FakeReader()).process_next()
+    receipts.delete(conn, sheet, photos_dir, rid, now=NOW)
+    assert outbox_op(conn, rid) is None
+
+
+def test_not_a_duplicate_releasing_an_ok_receipt_queues_a_put(env):
+    conn, sheet, photos_dir, worker = env
+    new_receipt(conn, photos_dir)
+    second = new_receipt(conn, photos_dir)
+    w = worker(FakeReader())
+    w.process_next()
+    w.process_next()
+    assert receipt(conn, second)["status"] == "duplicate"
+    assert outbox_op(conn, second) is None
+    receipts.dismiss_duplicate(conn, sheet, second, now=NOW)
+    assert outbox_op(conn, second) == "put"
+
+
+def test_without_offers_configured_the_outbox_just_fills(env):
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    w = worker(FakeReader())
+    w.process_next()
+    w.send_to_offers()  # offers = None
+    assert outbox_op(conn, rid) == "put"
+
+
+def test_the_thread_sends_to_offers_between_readings(env):
+    conn, sheet, photos_dir, worker = env
+    rid = new_receipt(conn, photos_dir)
+    w = worker(FakeReader())
+    w.offers = FakeOffers()
+    w.idle_wait = 0.05
+    w.start()
+    try:
+        for _ in range(100):
+            if w.offers.calls:
+                break
+            time.sleep(0.02)
+    finally:
+        w.stop()
+    assert [c[:2] for c in w.offers.calls] == [("PUT", rid)]
