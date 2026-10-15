@@ -24,6 +24,17 @@ Deferred and upcoming work. Delete an entry when it lands.
   `data/backup/pre-migration-{2,3}.db` on the host can go once v3 has run for a while — ask
   the user first.
 - 37 receipts scanned so far (all in the real Sheet except #1, which is detached).
+- Sheet work on 2026-10-14, by hand through the API at the user's request:
+  - New tab "Годишен Отчет €": a copy of "Годишен Отчет Лв" (the user renamed the original)
+    summing Разходи!D instead of C.
+  - 95 rows of Разходи (1162–1426) had only the € amount. They got the C formula
+    `=D×1,95583`, so the лв report stopped undercounting 2026.
+  - Both reports agree to the cent for 2026, checked cell by cell.
+- PWA install on Android: promo.fireto.net's "Install" seemed to do nothing. Both sites
+  have the same manifest, icons and service worker, so the likely causes are the icon
+  landing in the app drawer only (Samsung "Add new apps to Home screen") or Chrome's
+  engagement rules. Asked the user what ⋮ shows ("Install app" vs only "Add to home
+  screen"). If it is not installable, debug with Chrome remote debugging.
 - Push from the `rebuild` worktree (`../receit-processor-wt-int`):
   `git push git@github.com:fireto/receit-processor.git rebuild:main`. Local `main` holds
   the user's WIP and is behind; the user updates it with `git stash; git pull; git stash pop`.
