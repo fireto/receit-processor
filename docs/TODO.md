@@ -101,10 +101,8 @@ Deferred and upcoming work. Delete an entry when it lands.
 ## Next
 - Model comparison → choose the ladder and the backup provider (cheapest reliable model
   first); record the result in DESIGN.md.
-- Hand-off to offers: send each read receipt (header, lines, discounts, photo link) to an
-  offers endpoint with a queue and retries; re-send after an edit or re-read. offers ignores
-  ЕИКs that are not its chains. Designed together with the offers side (review screen,
-  matching, purchases, price corrections) in its own grilling round.
+- Hand-off to offers: designed 2026-10-15 (DESIGN.md "Hand-off to offers"), being built
+  (outbox, then backfill).
 - Restore drill with real data (photos) once receipts exist — tracked in the lab's
   docs/TODO.md.
 

@@ -16,7 +16,7 @@ first, then in code.
   cross-site` are refused (basic-auth credentials would ride along).
 - Every receipt (groceries, pharmacy, fuel, …) is read **with its line items**. The sister
   app **offers** (`../offers`, promo.fireto.net) will receive them for paid-price-per-item
-  tracking — that hand-off is a later phase (see docs/TODO.md); this app has no grocery logic.
+  tracking (see "Hand-off to offers"); this app has no grocery logic.
 - Currency: EUR, stored as integer cents.
 
 ## Flow
@@ -155,6 +155,30 @@ columns are never touched. An `ok` receipt with `sheet_written_at` NULL has a pe
 write, retried by the reader thread every minute. Deleting a row shifts the stored
 `sheet_row`s below it; a row whose Дата/Цена € no longer match the receipt is not deleted
 (the user is told to check it). All Sheet writes are serialised in-process.
+
+## Hand-off to offers (decided 2026-10-15)
+
+Every receipt that becomes `ok` or is confirmed is pushed to offers, which keeps the ones
+from its five chains (by ЕИК) and does all grocery logic: matching lines to products,
+purchases, paid prices, reports. The contract lives in offers' DESIGN.md ("Receipts").
+
+- **Outbox** (schema v4, `offers_outbox`): one pending operation per receipt — `put` or
+  `delete` — with `attempts`, `next_try_at` and `last_error`. Becoming `ok`, confirming,
+  editing a receipt that was sent, or a re-read that ends `ok` queues a `put` (the latest
+  state is sent, not a history); deleting one that was sent queues a `delete`. A new
+  operation replaces a pending one for the same receipt. `sent_to_offers_at` on the receipt
+  records the last successful `put`.
+- **Sending**: the worker thread drains the outbox between readings. `PUT
+  $OFFERS_URL/api/receipts/{id}` with the whole receipt (header, lines, discounts,
+  `photo_url` = `https://rec.fireto.net/receipts/{id}`) and `Authorization: Bearer
+  $OFFERS_TOKEN`; `DELETE` for deletions. 2xx → done (offers answers `stored: false` for
+  other shops — also done). Network error or 5xx → retry with backoff (1, 5, 15, 60 min,
+  then hourly); 4xx → kept with its error, not retried until the receipt changes.
+  `OFFERS_URL` unset → the outbox fills but nothing is sent (local dev, tests use a fake).
+  On the lab: `http://10.20.10.11:8090` (the host port, LAN only, not through Traefik).
+- `/healthz` is 503 when an operation has been pending for over 6 h.
+- `python -m backend.offers_outbox enqueue-all` queues a `put` for every `ok` or confirmed
+  receipt (the one-off backfill).
 
 ## UI
 
