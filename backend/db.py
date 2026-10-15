@@ -162,6 +162,80 @@ MIGRATIONS = [
         checked_at  TEXT NOT NULL
     );
     """,
+    # 4 — hand-off to offers: offers keys receipts on the id, so ids are no longer reused
+    # (AUTOINCREMENT needs a table rebuild); sent_to_offers_at is the last successful
+    # put, and the outbox holds one pending operation per receipt. The outbox has no
+    # foreign key: a delete must outlive its receipt.
+    """
+    CREATE TABLE receipt_v4 (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at       TEXT NOT NULL,
+        status           TEXT NOT NULL CHECK (status IN
+                             ('queued', 'reading', 'ok', 'check', 'retake', 'failed',
+                              'duplicate')),
+        source           TEXT NOT NULL CHECK (source IN ('camera', 'gallery', 'manual')),
+        -- header, as read (and edited)
+        date             TEXT,
+        time             TEXT,
+        total_cents      INTEGER,
+        eik              TEXT,
+        store_name       TEXT,
+        store_address    TEXT,
+        payment          TEXT CHECK (payment IN ('cash', 'card')),
+        card_last4       TEXT,
+        category         TEXT,
+        payment_method   TEXT,             -- a value of the Sheet's ПлатежноСредство
+        notes            TEXT,
+        qr_json          TEXT,
+        self_check_json  TEXT,
+        quality_json     TEXT,
+        -- reading queue: start_at is the ladder index the next reading starts at,
+        -- next_start_at the one "Прочети отново" would use (NULL: no better model)
+        queued_at        TEXT,
+        start_at         INTEGER NOT NULL DEFAULT 0,
+        next_start_at    INTEGER,
+        -- Google Sheet: the row, and when it was last written (NULL with status ok:
+        -- a write or an update is pending)
+        sheet_row        INTEGER,
+        sheet_written_at TEXT,
+        confirmed_at     TEXT,
+        -- the same receipt scanned again: the older receipt it repeats (NULL once that
+        -- one is deleted), the status it would have had, and "Не е дубликат" given
+        duplicate_of          INTEGER REFERENCES receipt(id) ON DELETE SET NULL,
+        duplicate_held_status TEXT,
+        duplicate_dismissed   INTEGER NOT NULL DEFAULT 0,
+        -- offers: when the last put succeeded (NULL: never sent)
+        sent_to_offers_at     TEXT
+    );
+    INSERT INTO receipt_v4 (id, created_at, status, source, date, time, total_cents, eik,
+        store_name, store_address, payment, card_last4, category, payment_method, notes,
+        qr_json, self_check_json, quality_json, queued_at, start_at, next_start_at,
+        sheet_row, sheet_written_at, confirmed_at, duplicate_of, duplicate_held_status,
+        duplicate_dismissed)
+    SELECT id, created_at, status, source, date, time, total_cents, eik,
+        store_name, store_address, payment, card_last4, category, payment_method, notes,
+        qr_json, self_check_json, quality_json, queued_at, start_at, next_start_at,
+        sheet_row, sheet_written_at, confirmed_at, duplicate_of, duplicate_held_status,
+        duplicate_dismissed FROM receipt;
+    DROP TABLE receipt;
+    ALTER TABLE receipt_v4 RENAME TO receipt;
+    CREATE INDEX receipt_status ON receipt (status, queued_at);
+    CREATE INDEX receipt_created ON receipt (created_at);
+    CREATE INDEX receipt_duplicate_key ON receipt (eik, date, total_cents);
+
+    -- next_try_at NULL: not retried (offers refused it, 4xx) until a new operation
+    -- replaces it; op_id tells a replaced operation from the one being sent
+    CREATE TABLE offers_outbox (
+        op_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        receipt_id   INTEGER NOT NULL UNIQUE,
+        op           TEXT NOT NULL CHECK (op IN ('put', 'delete')),
+        queued_at    TEXT NOT NULL,
+        attempts     INTEGER NOT NULL DEFAULT 0,
+        next_try_at  TEXT,
+        last_error   TEXT
+    );
+    CREATE INDEX offers_outbox_due ON offers_outbox (next_try_at);
+    """,
 ]
 
 
