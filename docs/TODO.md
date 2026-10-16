@@ -97,12 +97,10 @@ Deferred and upcoming work. Delete an entry when it lands.
 ## Next
 - Model comparison → choose the ladder and the backup provider (cheapest reliable model
   first); record the result in DESIGN.md.
-- Hand-off to offers: built 2026-10-15 on branch `offers-outbox` (schema v4: outbox,
-  `sent_to_offers_at`, AUTOINCREMENT ids; the enqueue-all CLI), not merged or deployed.
-  To go live: offers' receipts API deployed with `OFFERS_RECEIPTS_TOKEN`; on the host
-  `.env`, `OFFERS_URL=http://10.20.10.11:8090` and `OFFERS_TOKEN=<the same token>`;
-  rebuild; then `docker exec -u 1000:1000 receit-processor python -m backend.offers_outbox
-  enqueue-all` and watch `/healthz` (`offers_pending`). Open points:
+- Hand-off to offers live since 2026-10-16 (schema v4; `OFFERS_URL` / `OFFERS_TOKEN` in the
+  host `.env`). Backfill sent all 37 ok receipts (offers kept the 8 from its chains). A
+  re-queue: `docker exec -u 1000:1000 receit-processor python -m backend.offers_outbox
+  enqueue-all` (puts are idempotent). Open points:
   - `/healthz` turns 503 once an operation waits 6 h, also when `OFFERS_URL` is unset:
     deploy v4 with the env set (or offers live) within 6 h of the first ok receipt.
   - The outbox is visible only in `/healthz` and the logs; a 4xx (e.g. offers refusing a
